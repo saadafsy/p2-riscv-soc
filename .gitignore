@@ -1,0 +1,10 @@
+build/
+**/sim_build*/
+**/results*.xml
+**/*.vcd
+**/*.fst
+**/coverage*.dat
+__pycache__/
+*.pyc
+formal/*/
+obj_dir/

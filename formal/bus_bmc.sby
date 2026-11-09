@@ -1,0 +1,30 @@
+# BMC and cover on obi_decoder + obi2apb with the OBI/APB checkers.
+# A peripheral access takes 4 cycles (grant, SETUP, ACCESS, rvalid); depth 24
+# covers several back-to-back transfers with wait states.
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 24
+cover: mode cover
+cover: depth 24
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal obi_checker.sv apb_checker.sv
+read -formal apb_mux.sv obi2apb.sv obi_default_slave.sv obi_decoder.sv
+read -formal bus_formal_top.sv
+prep -top bus_formal_top
+
+[files]
+../rtl/bus/obi_checker.sv
+../rtl/bus/apb_checker.sv
+../rtl/bus/apb_mux.sv
+../rtl/bus/obi2apb.sv
+../rtl/bus/obi_default_slave.sv
+../rtl/bus/obi_decoder.sv
+bus_formal_top.sv
