@@ -54,7 +54,7 @@ under `build/` (gitignored), and each doc says how to rerun.
 | Lockstep, directed | 16 programs (ISA groups incl. muldiv, hello, timer interrupts, benchmark, accelerator and clock-gate tests), each at accelerator clocks of 73 and 137 MHz |
 | Lockstep, random | `make rand`: 100 random programs of about 1,500 instructions, M mixed in; every retired instruction compared |
 | Core tests | 53 cocotb tests, including random bus latency and interrupts during multiply/divide |
-| riscv-formal | RV32I core: 42 of 44 checks pass, 0 fail; `reg` and `pc_fwd` at depth 25 did not finish in 3 hours. The RV32IM rerun is in `formal/riscv-formal/` (summary in build/riscv-formal). |
+| riscv-formal | All 52 RV32IM checks pass, 0 fail (bounded model checking on the RVFI trace, free OBI memory with any grant/response timing). Covers every instruction including M, plus reg, pc_fwd, pc_bwd, unique, causal, ill and cover. Depths are 20 for instructions, 45 for divide/remainder, 15 to 25 for the consistency checks (`formal/riscv-formal/checks.cfg`). M results use riscv-formal's ALTOPS substitute functions; the arithmetic is checked by the ISS lockstep. |
 | Core formal (SymbiYosys) | BMC depth 30: x0 invariant, retire order, OBI rules, forward progress, M unit progress |
 | Bus, peripherals, CDC | cocotb with OBI/APB protocol checkers (SVA) and negative tests; unbounded two-clock proof of the async FIFO with four broken FIFOs caught; arbiter BMC with three seeded bugs caught |
 | UVM (APB subsystem) | 11 runs pass. Merged covergroup bins 337/338: one grant-wait bin is not hit on the current tree; it was 337/337 before the debug and M merges. Found the UART divisor bug; three injected bugs caught. |
