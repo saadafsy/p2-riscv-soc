@@ -1,0 +1,24 @@
+# BMC and cover on cdc_req_ack with two free clocks (multiclock). One round
+# trip needs at least 2 + 3 + 3 edges of the slower clock, two steps per
+# edge; depth 64 covers several complete transfers (the cover task shows 3).
+[tasks]
+bmc
+cover
+
+[options]
+multiclock on
+bmc: mode bmc
+bmc: depth 64
+cover: mode cover
+cover: depth 64
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal cdc_req_ack.sv debug_cdc_top.sv
+prep -top debug_cdc_top
+
+[files]
+../rtl/debug/cdc_req_ack.sv
+debug_cdc_top.sv

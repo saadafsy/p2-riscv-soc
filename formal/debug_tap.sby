@@ -1,0 +1,28 @@
+# jtag_tap: k-induction proof of the TMS / TRST reset property from an
+# arbitrary initial state (unbounded), BMC of the same, and cover of all 16
+# states after reset. Each tck edge takes two steps (multiclock); the
+# deepest state from Test-Logic-Reset is 6 edges away, plus 5 reset edges.
+[tasks]
+prove
+bmc
+cover
+
+[options]
+multiclock on
+prove: mode prove
+prove: depth 16
+bmc: mode bmc
+bmc: depth 32
+cover: mode cover
+cover: depth 32
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal jtag_tap.sv debug_tap_top.sv
+prep -top debug_tap_top
+
+[files]
+../rtl/debug/jtag_tap.sv
+debug_tap_top.sv
