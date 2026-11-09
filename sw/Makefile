@@ -2,6 +2,7 @@
 #   make -C sw              all ISA tests and C programs
 #   make -C sw isa | c      one group
 #   make -C sw hello        one program
+#   make -C sw board        attn_test for the Basys 3 (prints on the UART)
 #   make -C sw asm SRC=/abs/prog.S NAME=foo   any standalone assembly file
 TOOLS  ?= $(HOME)/tools/riscv/bin
 CC      = $(TOOLS)/riscv32-unknown-elf-clang
@@ -31,7 +32,7 @@ EXTRA_clkgate_test = $(COMMON)/accel.c
 ISA_PROGS = $(basename $(notdir $(wildcard $(SW)/isa/*.S)))
 C_PROGS   = $(basename $(notdir $(wildcard $(SW)/c/*.c)))
 
-.PHONY: all isa c asm clean $(ISA_PROGS) $(C_PROGS)
+.PHONY: all isa c asm board clean $(ISA_PROGS) $(C_PROGS)
 all: isa c
 isa: $(ISA_PROGS)
 c: $(C_PROGS)
@@ -73,6 +74,14 @@ $(BUILD)/$(NAME)/$(NAME).elf: $(ASM_SRC) $(COMMON)/link.ld FORCE
 	$(PRODUCTS)
 endif
 .PHONY: FORCE
+
+# Board firmware for fpga/build.tcl: attn_test with its results on the UART
+# (the simulation build prints only to SIMCTRL). -> build/sw/board/board.hex
+board: $(BUILD)/board/board.elf
+$(BUILD)/board/board.elf: $(SW)/c/attn_test.c $(COMMON_SRC) $(COMMON)/accel.c $(COMMON_HDR) $(COMMON)/link.ld
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -DBOARD $(LDFLAGS) -o $@ $(COMMON_SRC) $(COMMON)/accel.c $<
+	$(PRODUCTS)
 FORCE:
 
 # CoreMark (third_party/coremark + coremark/core_portme.*), kept out of build/sw so

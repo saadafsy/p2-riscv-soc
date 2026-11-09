@@ -248,7 +248,11 @@ static int run(int n, int use_irq) {
 }
 
 int main(void) {
-  printf_putchar = putchar_sim;
+#ifdef BOARD
+  printf_putchar = putchar_uart;  // board build: results on the USB-UART
+#else
+  printf_putchar = putchar_sim;   // simulation: SIMCTRL console only (fast)
+#endif
   if (!accel_present()) {
     printf("attn_test: no accelerator (ID 0x%08x), skipped\n", REG32(ACCEL_ID));
     return 0;
