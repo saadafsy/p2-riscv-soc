@@ -1,0 +1,98 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="940" height="470" viewBox="0 0 940 470" font-family="Helvetica, Arial, sans-serif" font-size="12">
+  <defs>
+    <marker id="a" viewBox="0 0 8 8" refX="7" refY="4" markerWidth="7" markerHeight="7" orient="auto">
+      <path d="M0,0 L8,4 L0,8 z" fill="#000"/>
+    </marker>
+  </defs>
+  <rect width="940" height="470" fill="#fff"/>
+  <rect x="20" y="20" width="900" height="430" fill="none" stroke="#000" stroke-width="1.2"/>
+  <text x="30" y="36" font-weight="bold">soc_top</text>
+  <text x="910" y="36" text-anchor="end" font-size="11" font-family="Courier New, monospace">clk</text>
+
+  <!-- core -->
+  <rect x="40" y="60" width="180" height="70" fill="#fff" stroke="#000"/>
+  <text x="130" y="80" text-anchor="middle">rv32_core</text>
+  <text x="130" y="96" text-anchor="middle" font-size="10">RV32IM + Zicsr, 5 stages</text>
+  <text x="130" y="110" text-anchor="middle" font-size="10">IF ID EX MEM WB</text>
+  <text x="130" y="123" text-anchor="middle" font-size="10">mul 4 cyc, div 34 cyc</text>
+
+  <!-- jtag -->
+  <rect x="40" y="170" width="180" height="56" fill="#fff" stroke="#000"/>
+  <text x="130" y="190" text-anchor="middle">jtag_debug</text>
+  <text x="130" y="206" text-anchor="middle" font-size="10">TAP (1149.1), OBI master</text>
+  <text x="130" y="219" text-anchor="middle" font-size="10">tck domain, req/ack CDC</text>
+  <line x1="170" y1="262" x2="170" y2="228" stroke="#000" marker-end="url(#a)"/>
+  <text x="178" y="258" font-size="10" font-family="Courier New, monospace">tck tms tdi tdo</text>
+
+  <!-- arbiter and decoder -->
+  <rect x="270" y="120" width="120" height="56" fill="#fff" stroke="#000"/>
+  <text x="330" y="140" text-anchor="middle">obi_arb2</text>
+  <text x="330" y="156" text-anchor="middle" font-size="10">round-robin</text>
+  <text x="330" y="169" text-anchor="middle" font-size="10">2 masters</text>
+  <polyline points="220,110 245,110 245,138 268,138" fill="none" stroke="#000" marker-end="url(#a)"/>
+  <text x="226" y="104" font-size="10">D, OBI 32</text>
+  <polyline points="220,198 245,198 245,160 268,160" fill="none" stroke="#000" marker-end="url(#a)"/>
+
+  <rect x="430" y="120" width="120" height="56" fill="#fff" stroke="#000"/>
+  <text x="490" y="140" text-anchor="middle">obi_decoder</text>
+  <text x="490" y="156" text-anchor="middle" font-size="10">addr[31:28]</text>
+  <text x="490" y="169" text-anchor="middle" font-size="10">0 RAM, 1 APB, 2 AXI</text>
+  <line x1="390" y1="148" x2="428" y2="148" stroke="#000" marker-end="url(#a)"/>
+
+  <!-- RAM -->
+  <rect x="270" y="270" width="150" height="60" fill="#fff" stroke="#000"/>
+  <text x="345" y="290" text-anchor="middle">dp_ram 64 KB</text>
+  <text x="345" y="306" text-anchor="middle" font-size="10">port A: instructions</text>
+  <text x="345" y="320" text-anchor="middle" font-size="10">port B: data / BIST</text>
+  <polyline points="70,130 70,300 268,300" fill="none" stroke="#000" marker-end="url(#a)"/>
+  <text x="76" y="250" font-size="10">I, OBI 32</text>
+  <rect x="270" y="360" width="150" height="40" fill="#fff" stroke="#000"/>
+  <text x="345" y="377" text-anchor="middle">mbist_marchc</text>
+  <text x="345" y="391" text-anchor="middle" font-size="10">March C-, via BIST mux</text>
+  <line x1="345" y1="360" x2="345" y2="332" stroke="#000" marker-end="url(#a)"/>
+  <polyline points="460,176 460,315 422,315" fill="none" stroke="#000" marker-end="url(#a)"/>
+
+  <!-- APB -->
+  <rect x="600" y="60" width="110" height="40" fill="#fff" stroke="#000"/>
+  <text x="655" y="78" text-anchor="middle">obi2apb</text>
+  <text x="655" y="92" text-anchor="middle" font-size="10">APB4 master</text>
+  <polyline points="550,135 575,135 575,80 598,80" fill="none" stroke="#000" marker-end="url(#a)"/>
+  <line x1="710" y1="80" x2="740" y2="80" stroke="#000" stroke-width="2"/>
+  <line x1="740" y1="50" x2="740" y2="230" stroke="#000" stroke-width="2"/>
+  <text x="746" y="46" font-size="10">APB4</text>
+  <g font-size="11">
+    <line x1="740" y1="62" x2="768" y2="62" stroke="#000" marker-end="url(#a)"/>
+    <rect x="770" y="52" width="130" height="22" fill="#fff" stroke="#000"/><text x="835" y="67" text-anchor="middle">UART (16-deep FIFOs)</text>
+    <line x1="740" y1="92" x2="768" y2="92" stroke="#000" marker-end="url(#a)"/>
+    <rect x="770" y="82" width="130" height="22" fill="#fff" stroke="#000"/><text x="835" y="97" text-anchor="middle">GPIO</text>
+    <line x1="740" y1="122" x2="768" y2="122" stroke="#000" marker-end="url(#a)"/>
+    <rect x="770" y="112" width="130" height="22" fill="#fff" stroke="#000"/><text x="835" y="127" text-anchor="middle">TIMER (mtime)</text>
+    <line x1="740" y1="152" x2="768" y2="152" stroke="#000" marker-end="url(#a)"/>
+    <rect x="770" y="142" width="130" height="22" fill="#fff" stroke="#000"/><text x="835" y="157" text-anchor="middle">SYSCTL</text>
+    <line x1="740" y1="182" x2="768" y2="182" stroke="#000" marker-end="url(#a)"/>
+    <rect x="770" y="172" width="130" height="22" fill="#fff" stroke="#000"/><text x="835" y="187" text-anchor="middle">SIMCTRL (sim only)</text>
+  </g>
+
+  <!-- AXI + accel domain -->
+  <rect x="600" y="250" width="110" height="40" fill="#fff" stroke="#000"/>
+  <text x="655" y="268" text-anchor="middle">obi2axil</text>
+  <text x="655" y="282" text-anchor="middle" font-size="10">AXI4-Lite master</text>
+  <polyline points="550,162 575,162 575,270 598,270" fill="none" stroke="#000" marker-end="url(#a)"/>
+  <rect x="600" y="310" width="110" height="40" fill="#fff" stroke="#000"/>
+  <text x="655" y="328" text-anchor="middle">axil_attn</text>
+  <text x="655" y="342" text-anchor="middle" font-size="10">registers, irq</text>
+  <line x1="655" y1="290" x2="655" y2="308" stroke="#000" marker-end="url(#a)"/>
+
+  <line x1="735" y1="245" x2="735" y2="440" stroke="#000" stroke-dasharray="6 4"/>
+  <text x="742" y="258" font-size="10" font-family="Courier New, monospace">accel_clk (gated)</text>
+  <rect x="725" y="310" width="20" height="40" fill="#fff" stroke="#000"/>
+  <text x="735" y="304" text-anchor="middle" font-size="9">FIFO</text>
+  <line x1="710" y1="330" x2="723" y2="330" stroke="#000"/>
+  <line x1="745" y1="330" x2="768" y2="330" stroke="#000" marker-end="url(#a)"/>
+  <rect x="770" y="300" width="130" height="60" fill="#fff" stroke="#000"/>
+  <text x="835" y="320" text-anchor="middle">attention_top</text>
+  <text x="835" y="336" text-anchor="middle" font-size="10">from p1-attention</text>
+  <text x="835" y="350" text-anchor="middle" font-size="10">via attn_seq</text>
+  <text x="742" y="425" font-size="10">gray-pointer async FIFOs,</text>
+  <text x="742" y="438" font-size="10">2-flop synchronizers</text>
+</svg>

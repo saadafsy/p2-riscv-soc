@@ -14,20 +14,8 @@ Every instruction the RTL retires is checked against a Python
 instruction-set simulator. The core is also taken through sky130 place and
 route and scan insertion.
 
-**RV32IM, 2.27 CoreMark/MHz** · **every instruction checked against an ISS** · **riscv-formal 52/52** · **sky130 core 119.8 MHz** · **98.4% scan coverage** · **Basys 3 bitstream meeting timing at 62.5 MHz (open-source flow; not yet on a board)**
 
-```mermaid
-flowchart LR
-    CORE["RV32IM core<br/>5-stage pipeline"] --> ARB["OBI arbiter<br/>+ decoder"]
-    JTAG["JTAG TAP<br/>debug master"] --> ARB
-    ARB --> RAM["64 KB RAM<br/>March C- BIST"]
-    ARB --> APB["APB4 bridge"]
-    APB --> PER["UART · GPIO · timer<br/>SYSCTL · SIMCTRL"]
-    ARB --> AXI["AXI4-Lite bridge"]
-    AXI --> CDC["async FIFOs<br/>(clock crossing)"]
-    CDC --> ACC["attention accelerator<br/>(from p1), clock-gated"]
-    CORE -. "instruction port" .-> RAM
-```
+![soc_top block diagram](docs/img/soc_block.svg)
 
 | sky130 layout of the core | Clock tree |
 |:---:|:---:|
