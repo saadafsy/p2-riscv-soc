@@ -14,7 +14,8 @@ ROOT   := $(abspath $(SW)/..)
 BUILD  ?= $(ROOT)/build/sw
 COMMON := $(SW)/common
 
-ARCH    = -march=rv32i_zicsr -mabi=ilp32 -mcmodel=medlow -mno-relax
+MARCH  ?= rv32im_zicsr
+ARCH    = -march=$(MARCH) -mabi=ilp32 -mcmodel=medlow -mno-relax
 CFLAGS  = $(ARCH) -O2 -g -ffreestanding -fno-builtin -nostdlib -Wall -Wextra -Werror \
           -I$(COMMON)
 ASFLAGS = $(ARCH) -g -I$(COMMON) -I$(SW)/isa

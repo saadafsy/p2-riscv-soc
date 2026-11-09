@@ -1,5 +1,5 @@
-// Minimal runtime for -march=rv32i: integer multiply/divide helpers that clang
-// calls for * / % (no M extension), plus memset/memcpy. Written in assembly so the
+// Minimal runtime: integer multiply/divide helpers that clang calls for * / % when
+// built without M (MARCH=rv32i_zicsr), plus memset/memcpy. Written in assembly so the
 // compiler cannot turn them back into calls to themselves.
     .text
 
