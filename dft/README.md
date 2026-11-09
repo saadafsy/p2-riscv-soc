@@ -31,6 +31,7 @@ benchmarks), so step 4 uses quaigh, which ships in the same image.
 | gpio_apb | 200 | 58 | 2,121 | 878 | 822 | 93.6% | 73 | 58 + 125 = 183 | pass |
 | timer_apb | 1,069 | 128 | 7,854 | 5,502 | 5,242 | 95.3% | 559 | 128 + 89 = 217 | pass |
 | uart_apb | 1,445 | 363 | 15,263 | 7,764 | 7,710 | 99.3% | 805 | 363 + 91 = 454 | pass |
+| rv32_core (RV32IM, RVFI port removed) | 20,164 | 2,329 | 155,756 | 117,684 | 115,823 | 98.4% | 3,881 | 2,329 + 173 = 2,502 | pass |
 
 The faults counted as undetected are those quaigh's SAT search found no
 pattern for in the full-scan view. They have not been classified one by one.
