@@ -67,7 +67,7 @@ under `build/` (gitignored), and each doc says how to rerun.
 | sky130 place and route (core) | OpenROAD RTL-to-GDS at 10 ns: 119.8 MHz signoff, 25.7k cells, 0.43 mm^2 die, 22.5 mW; 0 DRC, antenna or slew/cap violations (pd/README.md) |
 | DFT | Scan chain plus SAT-based stuck-at ATPG on the core, 98.4% of 117,684 collapsed faults with 3,881 patterns; peripherals 93.6 to 99.3%; chains verified in simulation (dft/README.md) |
 | Performance model | C++ model, calibrated on directed tests. It predicts held-out programs and CoreMark within 0.6% of RTL cycles at about 70 M instructions/s (docs/perf_model.md). |
-| Artix-7 | Synthesis before the debug logic: about 4.5k LUTs, 3.5k FFs, 16 RAMB36. The open-source place-and-route of the full board top is in `fpga/openxc7/`. |
+| Artix-7, Basys 3 (openXC7: yosys + nextpnr) | Board top without the accelerator (`ACCEL_EN = 0`) routes and meets timing: SoC clock 65.5 MHz post-route against 62.5 MHz, JTAG 275 MHz against 12 MHz. Uses 6.5k LUTs (31% of the XC7A35T), 3.1k FFs, 4 DSP48, 16 RAMB36, BSCANE2; bitstream written. The full SoC with the accelerator needs 20.7k LUTs, the whole part, and did not route. |
 
 Not done: running on the board. That needs Vivado, and `fpga/build.tcl` is
 ready. The FPGA-only parts (BSCANE2 JTAG, BUFGCE clock gate) are linted and
