@@ -1,10 +1,18 @@
 # p2-riscv-soc: a RISC-V SoC with C firmware, verified against a golden model
 
-A small system-on-chip for the Digilent Basys 3 (Artix-7): a 5-stage
-pipelined RV32IM core with machine-mode CSRs, traps and interrupts, 64 KB of
-on-chip RAM, an OBI interconnect, an AMBA APB peripheral bus (UART, GPIO,
-timer), and C firmware built with clang. Every instruction the RTL retires is
-checked against a Python instruction-set simulator.
+A small system-on-chip for the Digilent Basys 3 (Artix-7). It contains:
+- a 5-stage pipelined RV32IM core with machine-mode CSRs, traps and
+  interrupts;
+- 64 KB of on-chip RAM;
+- an OBI interconnect;
+- an AMBA APB peripheral bus (UART, GPIO, timer, system control);
+- the attention accelerator from p1 on AXI4-Lite, in its own clock domain;
+- JTAG debug and a RAM BIST;
+- C firmware built with clang.
+
+Every instruction the RTL retires is checked against a Python
+instruction-set simulator. The core is also taken through sky130 place and
+route and scan insertion.
 
 ```
      +------------------------------ soc_top -------------------------------+
@@ -19,36 +27,61 @@ checked against a Python instruction-set simulator.
      +----------------------------------------------------------------------+
 ```
 
-SYSCTL (0x1000_3000) holds the core in reset for JTAG program loading,
-starts the RAM BIST and gates the accelerator clock (docs/spec.md section 13).
+SYSCTL (0x1000_3000) holds the core in reset for JTAG program loading. It
+also starts the RAM BIST and gates the accelerator clock (docs/spec.md
+section 13).
 
 ## Results
 
+Numbers come from runs on 2026-11-09 of the code in this repo. The logs are
+under `build/` (gitignored), and each doc says how to rerun.
+
+### Design
+
 | | |
 |---|---|
-| ISA | RV32IM + Zicsr, M-mode: 11 CSR groups, 6 trap causes, timer and external interrupts; multiply 4 cycles, divide 34 cycles |
-| Golden model | Python ISS, 288 pytest cases incl. every M corner and deliberately broken variants that must fail |
-| Lockstep, directed | 15 programs (11 ISA test groups incl. muldiv, hello, timer-interrupt demo, CRC-32 + matrix benchmark, accelerator test) |
-| Lockstep, random | `make rand`: 100 random programs of ~1,500 instructions with M instructions mixed in, every retired instruction compared |
-| Core tests | 53 cocotb tests incl. random bus latency and interrupts during multiply/divide |
-| Bus and peripherals | cocotb tests with OBI and APB protocol checkers (SVA), negative tests per rule, SymbiYosys BMC |
-| Core formal | SymbiYosys BMC depth 30: x0 invariant, retire order, OBI rules, forward progress, M unit progress |
-| Performance | CPI 1.00 straight-line, 1.13 on the benchmark; load-use 1 stall, taken branch 2 |
-| CoreMark | 2.267 CoreMark/MHz with M, 0.962 without (RTL simulation, 2 iterations; not an official score, see docs/coremark.md) |
-| JTAG, BIST, clock gate (SoC level) | 4 cocotb tests with OBI checkers on every new link: JTAG traffic while `bench` runs in lockstep, JTAG program load and boot, BIST pass and stuck-at fail, clock stopped mid-run with the result equal to p1 `attn_fixed` |
-| Arbiter formal | SymbiYosys BMC depth 32 + cover: OBI rules on all links, exclusive grants, routing, fairness; three seeded bugs caught |
-| sky130 (core only, pre-layout) | 109 MHz at a 10 ns target with M (113 MHz before), see synth/README.md |
-| Artix-7 (synthesis) | SoC before M: ~4.5k LUTs, ~3.5k FFs, 16 RAMB36; the core alone with M is 4.1k LUTs, 3.0k FFs, 4 DSP48E1 (SoC not re-synthesized) |
+| ISA | RV32IM + Zicsr, M-mode: 11 CSR groups, 6 trap causes, timer and external interrupts. Multiply takes 4 cycles in EX, divide 34. |
+| Pipeline | CPI 1.00 straight-line, 1.13 on the CRC-32 + matrix benchmark; load-use 1 stall, taken branch 2 |
+| CoreMark | 2.267 CoreMark/MHz with M, 0.962 without. RTL simulation, 2 iterations; not an official score (docs/coremark.md). |
+| Accelerator | p1's attention engine behind AXI4-Lite and gray-pointer async FIFOs, with clock gating (docs/spec.md sections 12-13) |
+| Debug and test | JTAG TAP (IEEE 1149.1) with an OBI master behind a round-robin arbiter; core hold for program loading; March C- BIST of the 64 KB RAM |
 
-Not done yet: running on the board (needs Vivado; `fpga/build.tcl` is ready).
-The FPGA-only parts (BSCANE2 JTAG, BUFGCE clock gate) are linted against
-primitive stubs but not simulated or built in this change; the synthesis
-figures above predate them.
+### Verification
+
+| | |
+|---|---|
+| Golden model | Python ISS, 289 pytest cases, including every M corner and deliberately broken variants that must fail |
+| Lockstep, directed | 16 programs (ISA groups incl. muldiv, hello, timer interrupts, benchmark, accelerator and clock-gate tests), each at accelerator clocks of 73 and 137 MHz |
+| Lockstep, random | `make rand`: 100 random programs of about 1,500 instructions, M mixed in; every retired instruction compared |
+| Core tests | 53 cocotb tests, including random bus latency and interrupts during multiply/divide |
+| riscv-formal | RV32I core: 42 of 44 checks pass, 0 fail; `reg` and `pc_fwd` at depth 25 did not finish in 3 hours. The RV32IM rerun is in `formal/riscv-formal/` (summary in build/riscv-formal). |
+| Core formal (SymbiYosys) | BMC depth 30: x0 invariant, retire order, OBI rules, forward progress, M unit progress |
+| Bus, peripherals, CDC | cocotb with OBI/APB protocol checkers (SVA) and negative tests; unbounded two-clock proof of the async FIFO with four broken FIFOs caught; arbiter BMC with three seeded bugs caught |
+| UVM (APB subsystem) | 11 runs pass. Merged covergroup bins 337/338: one grant-wait bin is not hit on the current tree; it was 337/337 before the debug and M merges. Found the UART divisor bug; three injected bugs caught. |
+| SoC debug | JTAG traffic while `bench` runs in lockstep, JTAG program load and boot, BIST pass and stuck-at fail, accelerator clock stopped mid-run with an unchanged result |
+
+### Implementation
+
+| | |
+|---|---|
+| sky130 place and route (core) | OpenROAD RTL-to-GDS at 10 ns: 119.8 MHz signoff, 25.7k cells, 0.43 mm^2 die, 22.5 mW; 0 DRC, antenna or slew/cap violations (pd/README.md) |
+| DFT | Scan chain plus SAT-based stuck-at ATPG on the core, 98.4% of 117,684 collapsed faults with 3,881 patterns; peripherals 93.6 to 99.3%; chains verified in simulation (dft/README.md) |
+| Performance model | C++ model, calibrated on directed tests. It predicts held-out programs and CoreMark within 0.6% of RTL cycles at about 70 M instructions/s (docs/perf_model.md). |
+| Artix-7 | Synthesis before the debug logic: about 4.5k LUTs, 3.5k FFs, 16 RAMB36. The open-source place-and-route of the full board top is in `fpga/openxc7/`. |
+
+Not done: running on the board. That needs Vivado, and `fpga/build.tcl` is
+ready. The FPGA-only parts (BSCANE2 JTAG, BUFGCE clock gate) are linted and
+elaborated against the Xilinx cell library but not simulated. Nothing here
+is taped out.
 
 ## Run it
 
-Tools: Verilator, Yosys, SymbiYosys (OSS CAD Suite), Verible, cocotb, and a
-RISC-V clang (lowRISC toolchain in `~/tools/riscv`).
+Tools:
+- Verilator, Yosys and SymbiYosys (OSS CAD Suite);
+- Verible, cocotb, and a RISC-V clang (lowRISC toolchain in `~/tools/riscv`);
+- for `pd/` and `dft/`, Docker with the `openroad/orfs` and
+  `ghcr.io/aucohl/fault` images;
+- for `formal/riscv-formal/`, a clone of YosysHQ/riscv-formal.
 
 ```
 make sw       # build ISA tests and C programs, run each on the ISS
@@ -58,7 +91,11 @@ make periph   # bus/peripheral tests, protocol-checker negatives, formal
 make soc      # full SoC vs the ISS on every program
 make rand N=100
 make socdbg   # JTAG / core hold / BIST / clock gate: lint, latch check, formal, SoC tests
-make -C sw coremark   # then see docs/coremark.md
+make -C sw coremark            # then see docs/coremark.md
+make perf                      # C++ model, refit and compare against the RTL
+make dft                       # scan chain + ATPG for the peripherals and the core
+bash pd/run_orfs.sh rv32_core  # place and route
+bash formal/riscv-formal/run.sh -j8
 ```
 
 ## Layout
@@ -73,11 +110,14 @@ rtl/debug/   JTAG TAP and debug transport (OBI master)
 rtl/dft/     March C- memory BIST, RAM port mux
 rtl/clk/     clock gate (sky130 ICG cell, BUFGCE, or behavioral model)
 rtl/soc.f    SoC source list outside rtl/core (used by every flow)
-model/       instruction-set simulator, random program generator
+model/       instruction-set simulator, random program generator, perf/ (C++ model)
 sw/          crt0, linker script, drivers, ISA tests, C programs, CoreMark port
 third_party/ CoreMark sources (EEMBC, see docs/coremark.md)
-tb/          core/, periph/, soc/ (lockstep), accel/, debug/, dft/, socdbg/
-formal/      SymbiYosys setups
-fpga/        Basys 3 top, constraints, Vivado build script
-docs/spec.md the interface contract between blocks
+tb/          core/, periph/, soc/ (lockstep), accel/, debug/, dft/, socdbg/, uvm/
+formal/      SymbiYosys setups, riscv-formal wrapper
+pd/          OpenROAD place and route
+dft/         scan insertion and ATPG
+synth/       sky130 synthesis + STA, Artix-7 resource count
+fpga/        Basys 3 top, constraints, Vivado and openXC7 build scripts
+docs/        spec.md (the contract between blocks), coremark.md, perf_model.md
 ```
