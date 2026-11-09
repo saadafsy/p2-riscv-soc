@@ -158,7 +158,36 @@ module rv32_muldiv (
   logic [31:0] q_out, r_out;
   assign q_out  = neg_q ? 32'd0 - quo : quo;
   assign r_out  = neg_r ? 32'd0 - rem : rem;
+
+`ifdef RISCV_FORMAL_ALTOPS
+  // riscv-formal's substitute M functions (insns/insn_*.v): same timing and
+  // control, a datapath the solver can handle. Formal runs only.
+  logic [31:0] alt_a, alt_b, alt_r;
+  always_ff @(posedge clk) begin
+    if (rst) begin
+      alt_a <= 32'd0;
+      alt_b <= 32'd0;
+    end else if (!clear && state == SIdle && start) begin
+      alt_a <= a;
+      alt_b <= b;
+    end
+  end
+  always_comb begin
+    unique case (op_q)
+      3'd0:    alt_r = (alt_a + alt_b) ^ 32'h5876_063e;  // MUL
+      3'd1:    alt_r = (alt_a + alt_b) ^ 32'hf658_3fb7;  // MULH
+      3'd2:    alt_r = (alt_a - alt_b) ^ 32'hecfb_e137;  // MULHSU
+      3'd3:    alt_r = (alt_a + alt_b) ^ 32'h949c_e5e8;  // MULHU
+      3'd4:    alt_r = (alt_a - alt_b) ^ 32'h7f85_29ec;  // DIV
+      3'd5:    alt_r = (alt_a - alt_b) ^ 32'h10e8_fd70;  // DIVU
+      3'd6:    alt_r = (alt_a - alt_b) ^ 32'h8da6_8fa5;  // REM
+      default: alt_r = (alt_a - alt_b) ^ 32'h3138_d0e1;  // REMU
+    endcase
+  end
+  assign result = alt_r;
+`else
   assign result = !op_q[2] ? mres : op_q[1] ? r_out : q_out;
+`endif
 
 `ifdef FORMAL
   // Each multi-cycle state moves on every cycle until cleared: a multiply is done
