@@ -48,6 +48,10 @@ Results for the RV32IM + Zicsr core, 2026-11-09:
 | Power (tt corner, default activity) | 22.5 mW |
 | GDS | written (`6_final.gds`) |
 
+| Placement and routing | Clock tree |
+|---|---|
+| ![rv32_core layout](../docs/img/layout_rv32_core.png) | ![rv32_core clock tree](../docs/img/clock_tree_rv32_core.png) |
+
 The earlier RV32I core (before the M extension) routed at 115.8 MHz with
 17,555 cells and 18.7 mW.
 
