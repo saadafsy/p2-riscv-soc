@@ -1,6 +1,6 @@
 # synth/: rv32_core synthesis and static timing
 
-Standalone flow for the RV32I core only (`rtl/core/core.f`, in that order). The
+Standalone flow for the RV32IM core only (`rtl/core/core.f`, in that order). The
 SoC top, bus and peripherals are not part of it. Adapted from the p1-attention
 flow; everything it needs is in this directory.
 
@@ -33,7 +33,47 @@ Flow: `proc; setattr keep; synth -booth -flatten -run :fine; techmap kogge-stone
 synth -run fine:; dfflibmap; abc -D <ps> -script abc_timing; opt_clean; stat;
 write_verilog -noattr`, then `signed` stripped from declarations for OpenSTA.
 
-## Results (2026-11-08, Yosys 0.70+286, OpenSTA 3.1.0)
+## Results with the M extension (2026-11-09, Yosys 0.70+286, OpenSTA 3.1.0)
+
+sky130_fd_sc_hd tt_025C_1v80, pre-layout (ideal clock, liberty wire load, no
+placement). Tool estimates, not silicon.
+
+| PERIOD_NS (= ABC target) | WNS | min period | Fmax | violating reg->reg endpoints | area um^2 |
+|---|---|---|---|---|---|
+| 10 | +0.861 ns | 9.139 ns | 109.4 MHz | 0 / 4195 | 188004 |
+| 8  | -0.924 ns | 8.924 ns | 112.1 MHz | 103 / 4195, TNS -59.8 ns | 188010 |
+
+Against the RV32I core below: Fmax -3.6% (10 ns run), area +39%, 3235 flops
+(2211 dfxtp + 1024 edfxtp; +410, mostly the multiplier's operand copies,
+partial products and the divider), 23207 cells. Hold: worst +0.069 ns, MET.
+
+Worst path (both targets): multiplier stage 2, `u_md.hl_b[3]` (operand copy,
+fanout 24) -> 17 x 17 partial product -> `u_md.p_hl`; next groups are the
+pre-existing store path `fwd_a[0]` -> `mem_rvfi_wdata` / `mem_be` (+0.994 ns at
+10 ns). Other groups at 10 ns: in->reg +1.883 ns (`d_rdata[15]`), reg->out
++8.292 ns, in->out +9.078 ns.
+
+How the multiplier got there (each a full `sta-core` run at 10 ns):
+
+| multiplier structure | WNS @10 ns | Fmax | worst path |
+|---|---|---|---|
+| operands registered, one 33 x 33 multiply into EX/MEM (2 EX cycles) | -3.481 | 74.2 MHz | `u_md.mb` -> `mem_result` |
+| + four 17 x 17 partials registered, sum into EX/MEM (3 cycles) | -0.635 | 94.0 MHz | store path, fwd selects loaded by the M unit's operand capture |
+| + M unit operands from its own registered selects and mux | -0.432 | 95.9 MHz | `u_md.p_lh` -> carry-save + add -> `mem_result` |
+| + carry-save step moved before the partial-product registers | -0.301 | 97.1 MHz | `u_md.mb` (fanout 47) -> partial product -> `u_md.p_s` |
+| one operand copy per partial product, product word registered (4 cycles, kept) | +0.861 | 109.4 MHz | `u_md.hl_b` -> `u_md.p_hl` |
+
+The M unit's select copies are stored inverted (`fwd_*_mdn`): a plain kept copy
+made yosys `fsm_extract` segfault, and with `fsm_encoding none` the store path
+started at the copy, so it looked shared with `fwd_*` again.
+
+Xilinx 7-series (yosys `synth_xilinx -family xc7`, pre-place-and-route), core with M:
+
+| LUT | FF | CARRY4 | MUXF7/F8 | DSP48E1 | BRAM | LUTRAM |
+|---|---|---|---|---|---|---|
+| 4063 | 3014 | 155 | 8 / 1 | 4 | 0 | 0 |
+
+## Results before the M extension (2026-11-08, RV32I core)
 
 sky130_fd_sc_hd tt_025C_1v80, pre-layout (ideal clock, liberty wire load, no
 placement). Tool estimates, not silicon.
@@ -69,7 +109,7 @@ Steps 1 and 2 alone made ABC's mapping worse (the same cone surfaced at
 One copy of the forwarding select per operand gave +0.888 / -1.086 (fanout 57);
 the duplicate fixed that. CSR address pre-decode in ID was not needed (the CSR
 groups are no longer near the top).
-## Xilinx 7-series (yosys `synth_xilinx -family xc7`, pre-place-and-route)
+## Xilinx 7-series, RV32I core before M (yosys `synth_xilinx -family xc7`, pre-place-and-route)
 
 | LUT | FF | CARRY4 | MUXF7/F8 | DSP | BRAM | LUTRAM |
 |---|---|---|---|---|---|---|
