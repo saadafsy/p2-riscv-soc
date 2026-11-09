@@ -25,6 +25,7 @@ COMMON_SRC = $(COMMON)/crt0.S $(COMMON)/rt.S $(COMMON)/uart.c $(COMMON)/gpio.c \
 COMMON_HDR = $(wildcard $(COMMON)/*.h)
 # Extra sources per C program (the other programs stay byte-identical).
 EXTRA_attn_test = $(COMMON)/accel.c
+EXTRA_clkgate_test = $(COMMON)/accel.c
 
 ISA_PROGS = $(basename $(notdir $(wildcard $(SW)/isa/*.S)))
 C_PROGS   = $(basename $(notdir $(wildcard $(SW)/c/*.c)))

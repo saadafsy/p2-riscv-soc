@@ -26,10 +26,8 @@ vl axil_attn $ACCEL
 vl obi2axil rtl/bus/obi2axil.sv
 vl obi_decoder rtl/bus/obi_default_slave.sv rtl/bus/obi_decoder.sv
 vl obi_decoder -GAXI_EN=1 rtl/bus/obi_default_slave.sv rtl/bus/obi_decoder.sv
-vl soc_top $(cat rtl/core/core.f) \
-  rtl/mem/dp_ram.sv rtl/bus/obi_default_slave.sv rtl/bus/obi_decoder.sv rtl/bus/apb_mux.sv \
-  rtl/bus/obi2apb.sv rtl/bus/obi2axil.sv rtl/periph/sync_fifo.sv rtl/periph/uart_apb.sv \
-  rtl/periph/gpio_apb.sv rtl/periph/timer_apb.sv rtl/periph/simctrl_apb.sv $ACCEL rtl/soc_top.sv
+# shellcheck disable=SC2046
+vl soc_top $(cat rtl/core/core.f) $(cat rtl/soc.f)
 rm -f /tmp/p2_accel_lint_$$.log
 
 if verible-verilog-lint --rules=line-length=length:100 $A/*.sv rtl/bus/obi2axil.sv \

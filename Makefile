@@ -7,13 +7,15 @@
 #   make periph     peripheral/bus tests, negative checker tests, formal, synth check
 #   make soc        full SoC vs the ISS, every program in build/sw
 #   make rand       N random programs (default 100) on the SoC vs the ISS
+#   make socdbg     JTAG / core hold / MBIST / clock gate: lint, synth check,
+#                   arbiter formal, SoC-level cocotb tests (docs/spec.md 13)
 export PATH := $(HOME)/tools/riscv/bin:$(HOME)/oss-cad-suite/bin:$(HOME)/tools/verible/bin:$(PATH)
 ROOT  := $(abspath .)
 N     ?= 100
 SEED  ?= 1
 
-.PHONY: all sw model core periph soc rand clean
-all: sw model core periph soc rand
+.PHONY: all sw model core periph soc rand socdbg clean
+all: sw model core periph soc rand socdbg
 
 sw:
 	scripts/build_sw.sh --run
@@ -37,5 +39,11 @@ rand:
 	python3 model/randgen.py --batch $(N) --seed $(SEED) --length 1500 --build-dir $(ROOT)/build/rand
 	$(MAKE) -C tb/soc PROG_DIR=$(ROOT)/build/rand SIM_BUILD=sim_build_rand COCOTB_RESULTS_FILE=results_rand.xml
 
+socdbg: sw
+	bash tb/socdbg/lint.sh
+	bash tb/socdbg/synth.sh
+	cd formal && sby -f arb_bmc.sby
+	python3 tb/socdbg/run.py
+
 clean:
-	rm -rf build tb/*/sim_build* tb/*/results*.xml formal/*/
+	rm -rf build tb/*/sim_build* tb/*/results*.xml formal/*/ tb/socdbg/build
