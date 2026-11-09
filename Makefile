@@ -14,7 +14,7 @@ ROOT  := $(abspath .)
 N     ?= 100
 SEED  ?= 1
 
-.PHONY: all sw model core periph soc rand socdbg dft clean
+.PHONY: all sw model core periph soc rand socdbg dft perf clean
 all: sw model core periph soc rand socdbg
 
 sw:
@@ -50,6 +50,12 @@ dft:
 	bash dft/run_fault.sh timer_apb pclk presetn active_low -- rtl/periph/timer_apb.sv
 	bash dft/run_fault.sh uart_apb pclk presetn active_low -- rtl/periph/sync2ff.sv rtl/periph/sync_fifo.sv rtl/periph/uart_apb.sv
 	bash dft/run_fault.sh rv32_core_pd clk rst -- $(shell cat rtl/core/core.f) pd/rv32_core/rv32_core_pd.sv
+
+perf:
+	mkdir -p build/perf
+	g++ -std=c++17 -O2 -Wall -Wextra -o build/perf/p2perf model/perf/p2perf.cpp
+	grep -h -o '[a-z_0-9]*: PASS, [0-9]* instructions in [0-9]* cycles' build/full/soc73.log | sort -u > build/perf/rtl_cycles.txt
+	python3 model/perf/calibrate.py build/perf/rtl_cycles.txt
 
 clean:
 	rm -rf build tb/*/sim_build* tb/*/results*.xml formal/*/ tb/socdbg/build
