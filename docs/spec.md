@@ -13,7 +13,8 @@ the spec changes first.
 
 - SystemVerilog, synthesizable, one clock (`clk`) and one synchronous
   active-high reset (`rst`) per block unless stated. Every flop is reset.
-  No latches, no `initial` in RTL (formal-only code under `ifdef FORMAL`).
+  No latches (the one exception is the behavioral clock-gate model,
+  section 13.4), no `initial` in RTL (formal-only code under `ifdef FORMAL`).
 - Little-endian, byte-addressed, 32-bit words.
 - Lint clean with `verilator --lint-only -Wall` and `verible-verilog-lint`
   (100-column lines).
@@ -109,6 +110,7 @@ get an `rvalid` (no data). No error signal.
 | 0x1000_0000 - 0x1000_0FFF | | UART |
 | 0x1000_1000 - 0x1000_1FFF | | GPIO |
 | 0x1000_2000 - 0x1000_2FFF | | TIMER (mtime / mtimecmp) |
+| 0x1000_3000 - 0x1000_3FFF | | SYSCTL: core hold, accelerator clock gate, MBIST (section 13) |
 | 0x1000_F000 - 0x1000_FFFF | | SIMCTRL (simulation only; reads 0 on hardware) |
 | 0x2000_0000 - 0x2000_FFFF | | ATTN accelerator, AXI4-Lite, own clock domain (section 12) |
 
@@ -131,6 +133,8 @@ standard BRAM-initialization idiom on FPGAs and in simulation.
 
 ## 7. Interconnect
 
+`obi_arb2` (section 13.1) merges the core data port and the JTAG debug
+master into one OBI link in front of the decoder.
 `obi_decoder`: data port to {RAM port B, APB bridge, default slave} by
 addr[31:28], one outstanding transaction, response routed by a registered
 select. `obi2apb`: OBI slave to AMBA APB4 master (SETUP then ACCESS phase,
@@ -163,6 +167,8 @@ cycle, writable), 0x8 MTIMECMP_LO, 0xC MTIMECMP_HI (reset all-ones).
 SIMCTRL (simulation only, `ifndef SYNTHESIS`): 0x0 write EXIT: ends the
 simulation with exit code = value (0 = pass); 0x4 write PUTC: prints the
 low byte to the simulator console.
+
+SYSCTL (core hold, accelerator clock gate, RAM BIST): section 13.2.
 
 External interrupt line to the core = UART irq OR accelerator irq (section 12).
 
@@ -200,14 +206,18 @@ later a UVM environment on the APB bus and riscv-formal on the core.
 
 ```
 rtl/core/   rv32_core and its submodules (regfile, decoder, alu, csr, ...)
-rtl/bus/    obi_decoder, obi2apb, apb_mux
-rtl/periph/ uart_apb, gpio_apb, timer_apb, simctrl_apb, sync2ff, fifo
+rtl/bus/    obi_decoder, obi_arb2, obi2apb, obi2axil, apb_mux, protocol checkers
+rtl/periph/ uart_apb, gpio_apb, timer_apb, sysctl_apb, simctrl_apb, sync2ff, fifo
 rtl/mem/    dp_ram
-rtl/soc_top.sv
+rtl/accel/  axil_attn, attn_seq, async_fifo, p1/ (section 12)
+rtl/debug/  JTAG TAP, debug transport (OBI master), CDC handshake, BSCANE2 wrapper
+rtl/dft/    mbist_marchc, bist_ram_mux
+rtl/clk/    clk_gate (ICG)
+rtl/soc_top.sv, rtl/soc.f (every SoC source outside rtl/core, soc_top last)
 fpga/       Basys 3 top, XDC, build scripts
 model/      rv32_iss.py, random program generator
 sw/         common/, isa/, c/
-tb/         core/, periph/, soc/ (cocotb)
+tb/         core/, periph/, soc/, accel/, debug/, dft/, socdbg/ (cocotb)
 formal/     .sby files
 ```
 
@@ -289,3 +299,128 @@ and the lockstep bench compares every field except the read value for
 that range. `sw/c/attn_test.c` therefore checks the accelerator in software
 against a bit-exact C port of attn_fixed, and exits 0 without testing when
 ID does not read "ATTN" (a standalone ISS run).
+
+## 13. Debug, core hold, memory BIST and accelerator clock gating
+
+### 13.1 JTAG debug master and the data-bus arbiter
+
+`jtag_debug` (rtl/debug: `jtag_tap` + `jtag_obi_master` + `cdc_req_ack`,
+scan protocol in `rtl/debug/README.md`) is a second OBI master on the data
+side. `soc_top` ports: `tck`, `trst`, `tms`, `tdi`, `tdo`, `tdo_oe`, and
+`dbg_rst`, the reset of the transport's `clk` side. `dbg_rst` and `trst` must
+come from the same power-on event and never from a button or a
+debugger-controlled reset (a toggle handshake reset on one side only can
+replay or drop a request); in simulation `dbg_rst` is tied to `rst`. With
+parameter `JTAG_BSCAN = 1` (Basys 3, define `FPGA_XC7`) the transport sits
+behind the FPGA's BSCANE2 (Xilinx USER4, IR 0x23 on the XC7A35T) instead of
+`jtag_tap`, and the pin inputs are unused.
+
+`obi_arb2` sits between the masters and `obi_decoder`:
+- Policy: round-robin. A master requesting alone is forwarded
+  combinationally (no extra latency for the core). When both request in the
+  same cycle, the one that did not win the last handshake wins; the JTAG
+  master wins the first tie after reset. A waiting master is passed over by
+  at most one handshake of the other.
+- A request presented to the decoder without a grant locks the choice until
+  the grant, so the decoder sees addr / we / be / wdata held (OBI rule M1).
+- One transaction on the shared link at a time (the decoder enforces it);
+  the response goes to the master registered at the handshake.
+
+JTAG reaches everything the core's data port reaches: RAM (port B),
+every APB peripheral including SYSCTL, and the accelerator. Debug accesses
+are word-only (`be = 4'hF`). While the core runs, debug accesses interleave
+with its loads and stores; programs are unaffected unless they share the
+addresses. The core's instruction fetch (RAM port A) is never arbitrated.
+
+### 13.2 SYSCTL (APB slot 3, 0x1000_3000)
+
+| Off | Name | Bits |
+|---|---|---|
+| 0x00 | CTRL | [0] CORE_HOLD (RW, reset 0), [1] ACCEL_CLK_EN (RW, reset 1) |
+| 0x04 | STATUS | [0] CORE_HELD (RO), [1] ACCEL_CLK_ON (RO) |
+| 0x08 | BIST_CTRL | [0] START: write 1 to start the RAM BIST; taken only while CORE_HELD = 1 and BIST is not busy, ignored otherwise; reads 0 |
+| 0x0C | BIST_STATUS | [0] BUSY, [1] DONE (until the next START), [2] FAIL (sticky until the next START), [6:4] FAIL_ELEM (March element 0..5), [10:8] FAIL_BG (background) |
+| 0x10 | BIST_FAIL_ADDR | byte address of the first mismatch |
+| 0x14 | BIST_FAIL_SYN | expected XOR read data of the first mismatch |
+| 0x1C | ID | 0x5359_5343 ("SYSC") |
+
+CTRL acts only when `pstrb[0]` is set. Other offsets read 0.
+
+Core hold: the core is reset (`core_rst = rst | CORE_HELD`) while CORE_HOLD
+is 1 or the BIST is busy. CORE_HELD rises only in a cycle where the core is
+not waiting for a data-port grant, so the core never withdraws an
+ungranted OBI request; an access already granted completes on the bus and
+its response is dropped by the core in reset. Releasing CORE_HOLD restarts
+the core at `RESET_PC`. The JTAG boot flow: write CTRL = HOLD, poll STATUS
+until CORE_HELD, write the program image over JTAG, write CTRL = 0 (keeping
+ACCEL_CLK_EN as wanted). The core may also hold itself; then only JTAG or
+`rst` releases it.
+
+### 13.3 RAM BIST
+
+`mbist_marchc` (`AW = 14`, `BASE = 0`, `NBG = BIST_NBG`, default 1: the
+solid background, which detects stuck-at, transition, address-decoder and
+inter-word coupling faults) tests the whole 64 KB data RAM through port B:
+10 x 2^14 x NBG word accesses, two cycles each (327,680 cycles with
+NBG = 1, 3.3 ms at 100 MHz). `bist_ram_mux` gives port B to the BIST while it
+is busy; the data bus then gets no grant on RAM and its RAM requests wait.
+The select only changes with nothing outstanding on either side: BIST starts
+from an APB write (the single-transaction data bus has no RAM access in
+flight then) and ends after its last response.
+
+The core is kept off the RAM by the hold: START is ignored unless
+CORE_HELD = 1, and BIST busy keeps the core in reset even if CORE_HOLD is
+cleared meanwhile. The test is destructive: afterwards the RAM holds the
+background (all zeros with NBG = 1), so the program must be reloaded (JTAG)
+or the SoC reset with an `INIT_FILE` image. Poll BIST_STATUS over JTAG
+(APB, not RAM) until BUSY is 0; a JTAG RAM access during the test waits
+until the test ends.
+
+### 13.4 Accelerator clock gate
+
+`axil_attn`'s accelerator domain runs on `accel_gclk`, the output of
+`clk_gate` on `accel_clk`. SYSCTL.ACCEL_CLK_EN (system clock) passes a 2-flop
+synchronizer on `accel_clk` (reset value 1, so the domain is clocked while
+`accel_rst` is applied) into the gate's enable; STATUS.ACCEL_CLK_ON is that
+synchronized enable brought back through a 2-flop synchronizer, so software
+knows when the clock has actually stopped or restarted.
+
+`clk_gate` is an integrated clock gate (enable captured while the clock is
+low, output = clock AND captured enable; no glitches):
+- `SKY130`: the `sky130_fd_sc_hd__dlclkp` cell.
+- `FPGA_XC7`: a BUFGCE.
+- otherwise a behavioral model: an explicit `always_latch` plus an AND. This
+  is the one deliberate latch in the RTL (exception to section 1); the
+  synthesis check counts exactly one latch in `soc_top` with the model and
+  none with the sky130 cell.
+
+While the clock is stopped the accelerator domain freezes in place: a run
+in progress pauses and continues on restart with the same result and cycle
+count (attention_top counts its own clock), commands keep queuing in the
+command FIFO (a full FIFO delays the AXI write response, the bus waits) and
+nothing is lost. Software contract: stop the clock when idle (STATUS.BUSY =
+0) to save power, wait for ACCEL_CLK_ON = 0; to restart, set ACCEL_CLK_EN and
+wait for ACCEL_CLK_ON = 1 before relying on accelerator timing. Stopping
+the clock mid-run is allowed but the run then takes longer.
+
+### 13.5 Verification
+
+- `tb/soc` lockstep: JTAG idle (TAP in Test-Logic-Reset, no TCK), every
+  program including `sw/c/clkgate_test.c`, at both accelerator clock
+  ratios, plus the random programs.
+- `tb/socdbg` (cocotb on `tb_soc_dbg`: `soc_top` with OBI checkers on the
+  core port, the JTAG port, the arbiter output, the BIST port and RAM port
+  B): JTAG traffic to RAM, GPIO, TIMER, SYSCTL and the accelerator while
+  `bench` runs in lockstep with the ISS (cycles with both masters requesting
+  are counted and must occur); JTAG hold, program load and release with
+  `hello` in lockstep after the release; BIST START ignored while the core
+  runs, BIST pass on the RAM, BIST fail on a forced stuck-at-1 bit with the
+  expected address, element, background and syndrome; `clkgate_test` in
+  lockstep with no gated-clock edge while the enable is low and the frozen
+  run's output equal to p1 `attn_fixed`.
+- `formal/arb_bmc.sby`: BMC (depth 32) and cover on `obi_arb2` with the OBI
+  checkers on all three links plus exclusive grants, forwarding, response
+  routing and fairness.
+- Lint (`tb/socdbg/lint.sh`, verilator `-Wall` and verible, including the
+  board top against primitive stubs) and the latch check
+  (`tb/socdbg/synth.sh`).

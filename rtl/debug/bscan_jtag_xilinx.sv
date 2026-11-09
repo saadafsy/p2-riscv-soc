@@ -4,14 +4,14 @@
 // (USER4 = IR 6'h23 on the XC7A35T, 6-bit IR) instead of jtag_tap's USER_IR;
 // the 66-bit DR protocol is unchanged (rtl/debug/README.md).
 //
-// UNTESTED: compiled only by Vivado (XILINX_FPGA defined); no simulation or
-// lint run covers this file beyond a verible syntax check.
+// UNTESTED on a board: compiled only for the FPGA (FPGA_XC7 defined; not
+// XILINX_FPGA, which p1's RTL uses for its XPM ROM). Linted against stubs.
 //
 // BSCANE2 CAPTURE/SHIFT/UPDATE fire for any DR scan; jtag_obi_master gates
 // them with SEL. The tck-domain flops get no reset here (trst tied low):
 // BSCANE2 RESET is Test-Logic-Reset, which must not reset the CDC toggle
 // (see cdc_req_ack), and the bitstream initializes every flop to 0.
-`ifdef XILINX_FPGA
+`ifdef FPGA_XC7
 module bscan_jtag_xilinx #(
   parameter int JTAG_CHAIN = 4
 ) (
