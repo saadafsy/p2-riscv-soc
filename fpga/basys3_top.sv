@@ -9,10 +9,10 @@
 // GPIO outputs, and the USB-UART bridge is the SoC UART at 115200 baud. The
 // JTAG debug master is on the USB-JTAG cable through BSCANE2 (USER4); the
 // accelerator clock is gated by a BUFGCE inside soc_top (clk_gate).
-// ACCEL_EN defaults to 0 here: the full SoC with the attention accelerator
-// needs about 20.7k LUTs (openXC7 count), the whole of the XC7A35T's 20,800,
-// and does not route. Without it the SoC fits; ACCEL_EN = 1 suits a larger
-// part such as the Nexys A7-100T.
+// ACCEL_EN defaults to 0 here (a smaller, faster build). With ACCEL_EN = 1
+// the full SoC uses about 15.3k LUTs and 88 DSP48s, 98% of the XC7A35T's
+// 90, which nextpnr could not route; the build scripts' ACCEL=1 option maps
+// the 16 MAC multipliers to LUTs (72 DSPs), and that build routes.
 module basys3_top #(
     // verilog_lint: waive explicit-parameter-storage-type
     parameter     INIT_FILE = "firmware.hex",

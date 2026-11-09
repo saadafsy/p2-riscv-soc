@@ -264,8 +264,10 @@ N = 4..64 in steps of 4, int8 Q1.6 in and out, bit-exact against p1
 `model/attn.py attn_fixed`) as a memory-mapped peripheral at 0x2000_0000.
 `soc_top` parameter `ACCEL_EN` (default 1) can leave the accelerator out:
 0x2000_0000 then behaves like any unmapped range (reads 0, writes
-dropped) and the accelerator interrupt is 0. The Basys 3 top sets it to 0
-because the full SoC needs about 20.7k LUTs, the whole of the XC7A35T.
+dropped) and the accelerator interrupt is 0. The Basys 3 top defaults to 0
+(smaller, faster builds); the full SoC also fits the XC7A35T (15.3k LUTs,
+72 of its 90 DSP48 slices with the MAC multipliers in LUTs) and is built
+with ACCEL=1 (fpga/openxc7/build.sh, fpga/build.tcl).
 
 Sources: `rtl/accel/p1/` holds p1's `mac_unit`, `matmul_tile`,
 `exp_lut_1p`, `sync_ram`, `online_softmax`, `attention_top` byte-identical
