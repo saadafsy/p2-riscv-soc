@@ -13,6 +13,14 @@ set accel_clk [get_clocks -of_objects [get_pins u_mmcm/CLKOUT0]]
 set_max_delay -datapath_only -from $soc_clk -to $accel_clk 16.000
 set_max_delay -datapath_only -from $accel_clk -to $soc_clk 16.000
 
+# JTAG TCK from BSCANE2 (debug transport, rtl/debug): its own clock, at most
+# about 30 MHz on the Digilent cable. It meets the SoC clock only in the
+# cdc_req_ack toggle handshake; the held request/response words are bounded
+# by one SoC period (rtl/debug/README.md).
+create_clock -name jtag_tck -period 33.333 [get_pins -hierarchical -filter {NAME =~ *u_bscan/TCK}]
+set_max_delay -datapath_only -from [get_clocks jtag_tck] -to $soc_clk 16.000
+set_max_delay -datapath_only -from $soc_clk -to [get_clocks jtag_tck] 16.000
+
 ## Buttons (btnC is the reset)
 set_property -dict { PACKAGE_PIN U18 IOSTANDARD LVCMOS33 } [get_ports btn_c]
 set_property -dict { PACKAGE_PIN T18 IOSTANDARD LVCMOS33 } [get_ports btn_u]

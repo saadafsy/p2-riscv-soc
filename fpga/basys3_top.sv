@@ -4,9 +4,11 @@
 // the accelerator at 1000 / 20 = 50 MHz. The design treats them as unrelated
 // (the CDC FIFOs assume nothing). The SoC is below its 100 MHz ASIC target
 // because the FPGA route of the load-to-branch path closes at about 75 MHz.
-// btnC is the reset; both domains stay in reset until the MMCM locks. The other four buttons and the 16
-// switches are GPIO inputs, the 16 LEDs are GPIO outputs, and the USB-UART
-// bridge is the SoC UART at 115200 baud.
+// btnC is the reset; both domains stay in reset until the MMCM locks. The
+// other four buttons and the 16 switches are GPIO inputs, the 16 LEDs are
+// GPIO outputs, and the USB-UART bridge is the SoC UART at 115200 baud. The
+// JTAG debug master is on the USB-JTAG cable through BSCANE2 (USER4); the
+// accelerator clock is gated by a BUFGCE inside soc_top (clk_gate).
 module basys3_top #(
     // verilog_lint: waive explicit-parameter-storage-type
     parameter     INIT_FILE = "firmware.hex",
@@ -95,10 +97,29 @@ module basys3_top #(
   always_ff @(posedge accel_clk) arst_sync <= {arst_sync[0], rst};
   assign accel_rst = arst_sync[1];
 
+  // Debug transport reset: power-on only (MMCM lock), never the button, so a
+  // btnC press cannot replay or drop a JTAG request (rtl/debug/README.md).
+  logic [3:0] dbg_cnt;
+  logic       dbg_rst;
+  always_ff @(posedge clk) begin
+    if (!lock_sync[1]) begin
+      dbg_cnt <= '0;
+      dbg_rst <= 1'b1;
+    end else if (dbg_cnt != 4'hF) begin
+      dbg_cnt <= dbg_cnt + 4'd1;
+      dbg_rst <= 1'b1;
+    end else begin
+      dbg_rst <= 1'b0;
+    end
+  end
+
+  // JTAG goes through BSCANE2 (USER4 on the board's USB-JTAG), so the pin
+  // inputs of soc_top are tied off.
   soc_top #(
       .INIT_FILE     (INIT_FILE),
       .FINISH_ON_EXIT(1'b0),
-      .UART_DIV      (UartDiv)
+      .UART_DIV      (UartDiv),
+      .JTAG_BSCAN    (1'b1)
   ) u_soc (
       .clk      (clk),
       .rst      (rst),
@@ -107,7 +128,14 @@ module basys3_top #(
       .uart_rx  (uart_rx),
       .uart_tx  (uart_tx),
       .gpio_in  ({btn_d, btn_r, btn_l, btn_u, btn_c, sw}),
-      .gpio_out (led)
+      .gpio_out (led),
+      .dbg_rst  (dbg_rst),
+      .tck      (1'b0),
+      .trst     (1'b0),
+      .tms      (1'b0),
+      .tdi      (1'b0),
+      .tdo      (),
+      .tdo_oe   ()
   );
 
 endmodule

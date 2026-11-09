@@ -33,16 +33,20 @@ CHIPDB="$OPENXC7/share/nextpnr/himbaechel/xilinx/chipdb-$DIE.bin"
 mkdir -p "$OUT"
 cd "$ROOT"
 
-grep -E '^\s*(set_property .*(PACKAGE_PIN|IOSTANDARD)|create_clock)' fpga/basys3.xdc > "$OUT/basys3_pnr.xdc"
+# Only port-based clocks: the BSCANE2 TCK clock (get_pins) is Vivado-only.
+grep -E '^\s*(set_property .*(PACKAGE_PIN|IOSTANDARD)|create_clock .*get_ports)' fpga/basys3.xdc \
+  > "$OUT/basys3_pnr.xdc"
 
+# rtl/soc.f: everything outside the core, soc_top last.
 mapfile -t CORE < rtl/core/core.f
-SRCS=("${CORE[@]}" rtl/mem/*.sv rtl/bus/obi_*.sv rtl/bus/obi2apb.sv rtl/bus/obi2axil.sv
-      rtl/bus/apb_mux.sv rtl/periph/*.sv rtl/accel/*.sv rtl/accel/p1/*.sv
-      rtl/soc_top.sv fpga/basys3_top.sv)
+mapfile -t SOC < rtl/soc.f
+SRCS=("${CORE[@]}" "${SOC[@]}" fpga/basys3_top.sv)
 
+# FPGA_XC7 selects BSCANE2 (JTAG on the USB cable) and BUFGCE (accelerator
+# clock gate).
 echo "== yosys ($("$YOSYS" -V))"
 "$YOSYS" -q -l "$OUT/synth.log" -p "
-  read_verilog -sv -DSYNTHESIS -I$ROOT/rtl/accel/p1 ${SRCS[*]};
+  read_verilog -sv -DSYNTHESIS -DFPGA_XC7 -I$ROOT/rtl/accel/p1 ${SRCS[*]};
   chparam -set INIT_FILE \"$HEX\" $TOP;
   synth_xilinx -flatten -abc9 -arch xc7 -top $TOP;
   tee -o $OUT/synth_stat.txt stat;
