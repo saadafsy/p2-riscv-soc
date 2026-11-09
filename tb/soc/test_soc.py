@@ -12,7 +12,7 @@ import sys
 
 import cocotb
 from cocotb.clock import Clock
-from cocotb.triggers import ReadOnly, RisingEdge
+from cocotb.triggers import ReadOnly, RisingEdge, Timer
 
 ROOT = pathlib.Path(os.environ.get("P2_ROOT", pathlib.Path(__file__).resolve().parents[2]))
 sys.path.insert(0, str(ROOT / "model"))
@@ -55,14 +55,31 @@ def find(handle, *paths):
     return None
 
 
-async def run_program(dut, hexpath):
-    words = [int(l, 16) for l in pathlib.Path(hexpath).read_text().split()]
+def read_hex(hexpath):
+    return [int(l, 16) for l in pathlib.Path(hexpath).read_text().split()]
+
+
+async def reset_soc(dut, words, soc=None):
+    """Power-on reset of all domains with the RAM preloaded. The JTAG pins
+    are driven idle; trst is applied with a few TCK pulses (it is synchronous
+    to TCK) and released with rst, as rtl/debug/README.md requires."""
+    soc = dut if soc is None else soc
     dut.rst.value = 1
+    dut.dbg_rst.value = 1
     dut.accel_rst.value = 1
     dut.uart_rx.value = 1
     dut.gpio_in.value = 0
+    dut.trst.value = 1
+    dut.tms.value = 1
+    dut.tdi.value = 0
+    dut.tck.value = 0
     for i in range(1 << 14):
-        dut.u_ram.mem[i].value = words[i] if i < len(words) else 0
+        soc.u_ram.mem[i].value = words[i] if i < len(words) else 0
+    for _ in range(3):
+        await Timer(20, unit="ns")
+        dut.tck.value = 1
+        await Timer(20, unit="ns")
+        dut.tck.value = 0
     for _ in range(5):
         await RisingEdge(dut.clk)
     for _ in range(3):
@@ -70,13 +87,25 @@ async def run_program(dut, hexpath):
     dut.accel_rst.value = 0
     await RisingEdge(dut.clk)
     dut.rst.value = 0
+    dut.dbg_rst.value = 0
+    dut.trst.value = 0
 
+
+async def run_program(dut, hexpath):
+    await reset_soc(dut, read_hex(hexpath))
+    return await check_lockstep(dut, hexpath)
+
+
+async def check_lockstep(dut, hexpath, soc=None, max_cycles=MAX_CYCLES):
+    """Compare every retirement with the ISS, starting with the core fresh out of
+    reset (or held in it), until SIMCTRL EXIT."""
+    soc = dut if soc is None else soc
     iss = Iss(auto_irq=False)
     iss.load_hex(hexpath)
-    core = dut.u_core
+    core = soc.u_core
     mcause = find(core, "u_csr.mcause", "u_csr.mcause_q", "csr_mcause", "mcause")
     prev_trap, retired, history = 0, 0, []
-    for cycle in range(MAX_CYCLES):
+    for cycle in range(max_cycles):
         await RisingEdge(dut.clk)
         await ReadOnly()
         if int(core.rvfi_valid.value):
@@ -103,11 +132,11 @@ async def run_program(dut, hexpath):
                 iss.x[rtl["rd_addr"]] = rtl["rd_wdata"]
             prev_trap = rtl["trap"]
             retired += 1
-        if int(dut.u_simctrl.exit_seen.value):
-            code = int(dut.u_simctrl.exit_code.value)
+        if int(soc.u_simctrl.exit_seen.value):
+            code = int(soc.u_simctrl.exit_code.value)
             assert code == 0, f"{pathlib.Path(hexpath).stem}: program exit code {code}"
             return retired, cycle + 1
-    raise AssertionError(f"{pathlib.Path(hexpath).stem}: no EXIT within {MAX_CYCLES} cycles")
+    raise AssertionError(f"{pathlib.Path(hexpath).stem}: no EXIT within {max_cycles} cycles")
 
 
 @cocotb.test()

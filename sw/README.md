@@ -27,13 +27,14 @@ Each program `<name>` produces `build/sw/<name>/<name>.{elf,bin,hex,dis}`:
 |---|---|
 | `common/crt0.S` | `_start`: sp = 0x10000, clear .bss, mtvec = `_trap_entry`, `main()`, EXIT = return value |
 | `common/link.ld` | everything in RAM at 0x0, `.text.init` first |
-| `common/soc.h` | register map (spec 5, 8), CSR helpers, `sim_exit`, `sim_putc` |
+| `common/soc.h` | register map (spec 5, 8, 13), CSR helpers, `sim_exit`, `sim_putc` |
 | `common/uart.c`, `gpio.c`, `timer.c` | drivers |
 | `common/printf.c` | `printf` with `%d %i %u %x %X %p %s %c %%`, zero pad and width |
 | `isa/*.S` | self-checking ISA tests, one per group; `isa/isa.h` macros |
 | `c/hello.c` | prints via UART and SIMCTRL PUTC |
 | `c/timer_irq.c` | 5 periodic machine-timer interrupts |
 | `c/bench.c` | CRC-32 (4 KB) + 8x8 matmul with known checksums; prints mcycle/minstret |
+| `c/clkgate_test.c` | stops and restarts the accelerator clock (SYSCTL, spec 13.4), freezes an N=16 run mid-way, checks result and cycle count against an ungated run; skips on the ISS |
 
 Traps in C programs: `_trap_entry` saves caller-saved registers and calls
 `uint32_t trap_handler(mcause, mepc, mtval)`, which returns the pc to resume at. The weak

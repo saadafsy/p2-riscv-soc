@@ -6,11 +6,20 @@
 | `jtag_obi_master.sv` | 66-bit debug DR, single OBI word transactions | tck + clk |
 | `cdc_req_ack.sv` | toggle request/acknowledge handshake, 2-flop synchronizers | tck + clk |
 | `jtag_debug.sv` | `jtag_tap` + `jtag_obi_master`, for JTAG on board pins | tck + clk |
-| `bscan_jtag_xilinx.sv` | `BSCANE2` + `jtag_obi_master`, for the Basys 3 USB-JTAG (`XILINX_FPGA` only, **untested**) | tck + clk |
+| `bscan_jtag_xilinx.sv` | `BSCANE2` + `jtag_obi_master`, for the Basys 3 USB-JTAG (`FPGA_XC7` only, **untested on a board**) | tck + clk |
 
-Not integrated into `soc_top`. The OBI master port follows spec section 4
-(word accesses, `be = 4'hF`, one outstanding transaction) and is meant for a
-second master on the data side (an arbiter in front of `obi_decoder`).
+Integrated in `soc_top` (docs/spec.md section 13.1): the OBI master port
+(spec section 4: word accesses, `be = 4'hF`, one outstanding transaction) is
+master 1 of `rtl/bus/obi_arb2.sv`, which shares `obi_decoder` with the core
+data port (round-robin). It reaches RAM, every APB peripheral (including
+SYSCTL: core hold, BIST, accelerator clock gate) and the accelerator.
+`soc_top` uses `jtag_debug` on its `tck/tms/tdi/tdo/trst` pins, or
+`bscan_jtag_xilinx` with `JTAG_BSCAN = 1` (the Basys 3 top does). The
+transport's `clk`-side reset is the `soc_top` port `dbg_rst` (see Resets
+below); the board top drives it from the MMCM lock only, not from btnC.
+
+The define is `FPGA_XC7`, not `XILINX_FPGA`: p1's `online_softmax.sv`
+already uses `XILINX_FPGA` to select an XPM ROM that P2 does not include.
 
 ## TAP
 
@@ -105,11 +114,15 @@ or button reset. Test-Logic-Reset does not reset the handshake.
 `bscan_jtag_xilinx` replaces `jtag_tap` with the FPGA's own TAP: select the
 debug DR with the Xilinx USER4 instruction (6-bit IR `0x23` on the
 XC7A35T, `JTAG_CHAIN = 4`) instead of `0x18`; the 66-bit protocol is the
-same. It is compiled only by Vivado (define `XILINX_FPGA`) and has not been
-simulated or run on a board.
+same. It is compiled only for the FPGA (define `FPGA_XC7`, set by
+`fpga/build.tcl` and `fpga/openxc7/build.sh`), linted against primitive
+stubs (`tb/socdbg/lint.sh`), and has not been simulated or run on a board.
+The XDC constrains its TCK as clock `jtag_tck` (33.3 ns, Vivado only).
 
 ## Verification
 
 `make -C tb/debug all`: lint (verilator `-Wall`, verible 100 columns), the
 cocotb bench (`tb/debug/test_jtag.py`) and SymbiYosys on the TAP
 (`formal/debug_tap.sby`) and the handshake (`formal/debug_cdc.sby`).
+In the SoC: `python tb/socdbg/run.py` (JTAG traffic while the core runs,
+JTAG program load and boot) and `formal/arb_bmc.sby` (the arbiter).

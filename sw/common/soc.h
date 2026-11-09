@@ -30,6 +30,20 @@
 #define TIMER_MTIMECMP_LO (TIMER_BASE + 0x8)
 #define TIMER_MTIMECMP_HI (TIMER_BASE + 0xC)
 
+#define SYSCTL_BASE   0x10003000u
+#define SYSCTL_CTRL        (SYSCTL_BASE + 0x00)  // [0] CORE_HOLD, [1] ACCEL_CLK_EN
+#define SYSCTL_STATUS      (SYSCTL_BASE + 0x04)  // [0] CORE_HELD, [1] ACCEL_CLK_ON
+#define SYSCTL_BIST_CTRL   (SYSCTL_BASE + 0x08)  // [0] START (only while CORE_HELD)
+#define SYSCTL_BIST_STATUS (SYSCTL_BASE + 0x0C)  // [0] BUSY [1] DONE [2] FAIL
+#define SYSCTL_BIST_ADDR   (SYSCTL_BASE + 0x10)
+#define SYSCTL_BIST_SYN    (SYSCTL_BASE + 0x14)
+#define SYSCTL_ID          (SYSCTL_BASE + 0x1C)  // "SYSC"
+#define SYSCTL_ID_VALUE    0x53595343u
+#define SYSCTL_CORE_HOLD    (1u << 0)
+#define SYSCTL_ACCEL_CLK_EN (1u << 1)
+#define SYSCTL_ST_CORE_HELD (1u << 0)
+#define SYSCTL_ST_CLK_ON    (1u << 1)
+
 #define SIMCTRL_EXIT  (SIMCTRL_BASE + 0x0)  // W: end simulation, code = value
 #define SIMCTRL_PUTC  (SIMCTRL_BASE + 0x4)  // W: print low byte
 

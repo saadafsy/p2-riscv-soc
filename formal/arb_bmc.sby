@@ -1,0 +1,27 @@
+# BMC and cover on obi_arb2 with the OBI checkers on all three links, from
+# reset. Every transfer needs at least a grant cycle and a response cycle;
+# depth 32 covers many transfers of each master with grant and response wait
+# states, and the cover task shows alternating grants under contention.
+# (No k-induction: the checkers' history registers are not linked to the
+# arbiter state, so induction fails on unreachable states.)
+[tasks]
+bmc
+cover
+
+[options]
+bmc: mode bmc
+bmc: depth 32
+cover: mode cover
+cover: depth 24
+
+[engines]
+smtbmc boolector
+
+[script]
+read -formal obi_checker.sv obi_arb2.sv arb_formal_top.sv
+prep -top arb_formal_top
+
+[files]
+../rtl/bus/obi_checker.sv
+../rtl/bus/obi_arb2.sv
+arb_formal_top.sv
