@@ -110,7 +110,7 @@ get an `rvalid` (no data). No error signal.
 | 0x1000_1000 - 0x1000_1FFF | | GPIO |
 | 0x1000_2000 - 0x1000_2FFF | | TIMER (mtime / mtimecmp) |
 | 0x1000_F000 - 0x1000_FFFF | | SIMCTRL (simulation only; reads 0 on hardware) |
-| 0x2000_0000 - 0x2000_FFFF | | reserved: accelerator (later, AXI4-Lite) |
+| 0x2000_0000 - 0x2000_FFFF | | ATTN accelerator, AXI4-Lite, own clock domain (section 12) |
 
 Data-port accesses decode on addr[31:28]: 0 = RAM, 1 = APB bridge,
 anything else returns 0 on reads and drops writes (no trap; documented).
@@ -164,7 +164,7 @@ SIMCTRL (simulation only, `ifndef SYNTHESIS`): 0x0 write EXIT: ends the
 simulation with exit code = value (0 = pass); 0x4 write PUTC: prints the
 low byte to the simulator console.
 
-External interrupt line to the core = UART irq.
+External interrupt line to the core = UART irq OR accelerator irq (section 12).
 
 ## 9. Software
 
@@ -210,3 +210,82 @@ sw/         common/, isa/, c/
 tb/         core/, periph/, soc/ (cocotb)
 formal/     .sby files
 ```
+
+## 12. Accelerator
+
+The p1-attention engine (`attention_top`, one attention head, D = 16,
+N = 4..64 in steps of 4, int8 Q1.6 in and out, bit-exact against p1
+`model/attn.py attn_fixed`) as a memory-mapped peripheral at 0x2000_0000.
+
+Sources: `rtl/accel/p1/` holds p1's `mac_unit`, `matmul_tile`,
+`exp_lut_1p`, `sync_ram`, `online_softmax`, `attention_top` byte-identical
+to the commit named in `rtl/accel/p1/README.md`. The p1 files include
+`"rtl/exp_lut.svh"`, so the header lives at `rtl/accel/p1/rtl/exp_lut.svh`
+and every tool gets `+incdir+rtl/accel/p1`. Instantiated with
+`PIPE_ROM = 1, PV_SPLIT = 0` (p1's FPGA configuration).
+
+Path: core data port -> `obi_decoder` (addr[31:28] = 2, parameter
+`AXI_EN = 1` in `soc_top`; with `AXI_EN = 0` nibble 2 stays on the default
+slave) -> `obi2axil` (OBI slave to AXI4-Lite master, one transaction
+outstanding, `bready = rready = 1`, AW and W issued together, AxPROT = 0,
+WSTRB = OBI be; a SLVERR response completes the OBI transaction normally,
+reads then return 0) -> `axil_attn`.
+
+`axil_attn` (system clock `clk`, `rst`; accelerator clock `accel_clk`,
+`accel_rst`, each reset synchronous to its own clock and both asserted
+together at power-up):
+- AXI4-Lite slave: AW, W, B, AR, R with full valid/ready handshakes. AW and
+  W are accepted independently (one of each held); the write executes when
+  both are held and B is free; B and R hold until `bready` / `rready`.
+  OKAY for mapped registers, SLVERR for unmapped or misaligned offsets, for any address
+  with addr[27:16] != 0, for LOAD or CTRL.START while busy, for START with
+  an illegal N, and for LOAD / RD_ADDR writes without all four strobes.
+  Writes to read-only bits are ignored (OKAY).
+- Registers (32-bit, offset from 0x2000_0000):
+
+| Off | Name | Bits |
+|---|---|---|
+| 0x00 | CTRL | [0] START (write 1: run, reads 0), [14:8] N_LEN (RW, reset 4) |
+| 0x04 | STATUS | [0] BUSY (RO), [1] DONE (sticky, write 1 to clear), [2] IRQ_EN (RW), [3] ACCEL_BUSY (RO, attention_top busy through a 2-flop synchronizer) |
+| 0x08 | LOAD | W: [7:0] data (Q1.6), [17:8] addr {row[5:0], col[3:0]}, [21:20] sel (0 Q, 1 K, 2 V); reads 0 |
+| 0x0C | RD_ADDR | [9:0] output address {row, col}; a write requests that byte |
+| 0x10 | RD_DATA | [7:0] the byte requested by the last RD_ADDR write; a read waits (R held) until it has arrived |
+| 0x14 | CYCLES | attention_top `cycle_count` of the last finished run |
+| 0x18 | IRQ | [0] pending = DONE & IRQ_EN (RO); write 1 clears DONE |
+| 0x1C | ID | 0x4154_544E ("ATTN") |
+
+- BUSY is set when START is accepted and cleared when the run's completion
+  record arrives back in the system domain, so a read after START never
+  sees an idle accelerator that has not started yet.
+- `irq` = DONE & IRQ_EN, ORed into the core's external interrupt with the
+  UART irq (the handler tells them apart by reading the two status
+  registers).
+
+Clock-domain crossing (`rtl/accel/async_fifo.sv`, depth 4, gray-coded
+pointers through 2-flop synchronizers, every flop reset):
+- Command FIFO, system -> accelerator: {op, payload} with op LOAD (sel,
+  addr, data), START (n_len), READ (rd_addr). A full FIFO stalls the AXI
+  write (B is delayed), it never drops a command.
+- Response FIFO, accelerator -> system: {kind, data[31:0]} with kind READ
+  (rd_data) or DONE (cycle_count). DONE travels through the FIFO rather
+  than as a pulse synchronizer so that CYCLES is always updated in the same
+  system cycle as DONE. The system side pops every cycle, so it never
+  back-pressures the accelerator for long.
+- ACCEL_BUSY is the only signal on a plain 2-flop synchronizer (a level,
+  informational).
+- The accelerator-side sequencer executes one command at a time: LOAD is a
+  one-cycle write strobe, START a one-cycle start pulse, READ drives
+  rd_addr and pushes rd_data two cycles later; done pushes {DONE,
+  cycle_count}.
+
+Software contract: load Q, K, V for rows 0..N-1 while idle, write CTRL
+with N_LEN and START, wait for DONE (poll STATUS or take the interrupt),
+then write RD_ADDR / read RD_DATA per output byte. `attention_top` cycle
+count is nblk * (16 nblk + 156) + 1 accelerator cycles, nblk = N / 4.
+
+Golden model: the ISS cannot model the accelerator. Reads of 0x2000_0000 -
+0x2000_FFFF are flagged `nondet` (value 0 in the ISS), writes are dropped,
+and the lockstep bench compares every field except the read value for
+that range. `sw/c/attn_test.c` therefore checks the accelerator in software
+against a bit-exact C port of attn_fixed, and exits 0 without testing when
+ID does not read "ATTN" (a standalone ISS run).

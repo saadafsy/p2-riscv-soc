@@ -23,6 +23,8 @@ LDFLAGS = $(ARCH) -nostdlib -fuse-ld=lld -T$(COMMON)/link.ld -Wl,--no-relax
 COMMON_SRC = $(COMMON)/crt0.S $(COMMON)/rt.S $(COMMON)/uart.c $(COMMON)/gpio.c \
              $(COMMON)/timer.c $(COMMON)/printf.c
 COMMON_HDR = $(wildcard $(COMMON)/*.h)
+# Extra sources per C program (the other programs stay byte-identical).
+EXTRA_attn_test = $(COMMON)/accel.c
 
 ISA_PROGS = $(basename $(notdir $(wildcard $(SW)/isa/*.S)))
 C_PROGS   = $(basename $(notdir $(wildcard $(SW)/c/*.c)))
@@ -49,9 +51,9 @@ endef
 
 define C_RULE
 $(1): $(BUILD)/$(1)/$(1).elf
-$(BUILD)/$(1)/$(1).elf: $(SW)/c/$(1).c $(COMMON_SRC) $(COMMON_HDR) $(COMMON)/link.ld
+$(BUILD)/$(1)/$(1).elf: $(SW)/c/$(1).c $(COMMON_SRC) $(EXTRA_$(1)) $(COMMON_HDR) $(COMMON)/link.ld
 	@mkdir -p $$(dir $$@)
-	$$(CC) $$(CFLAGS) $$(LDFLAGS) -o $$@ $(COMMON_SRC) $$<
+	$$(CC) $$(CFLAGS) $$(LDFLAGS) -o $$@ $(COMMON_SRC) $(EXTRA_$(1)) $$<
 	$$(PRODUCTS)
 endef
 

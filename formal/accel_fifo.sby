@@ -1,0 +1,25 @@
+# async_fifo with two unrelated clocks (multiclock): unbounded proof (PDR) of
+# no overflow / no underflow / order (about 14 minutes), and covers (full,
+# drained after full, pointer wrap).   sby -f formal/accel_fifo.sby
+[tasks]
+prove
+cover
+
+[options]
+multiclock on
+prove: mode prove
+cover: mode cover
+cover: depth 80
+
+[engines]
+prove: abc pdr
+cover: smtbmc boolector
+
+[script]
+read -formal sync2ff.sv async_fifo.sv accel_fifo_top.sv
+prep -top accel_fifo_top
+
+[files]
+../rtl/periph/sync2ff.sv
+../rtl/accel/async_fifo.sv
+accel_fifo_top.sv

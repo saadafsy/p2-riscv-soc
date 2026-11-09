@@ -13,8 +13,10 @@ create_project -in_memory -part xc7a35tcpg236-1
 set srcs {}
 foreach f [split [string trim [read [open $root/rtl/core/core.f]]] "\n"] { lappend srcs $root/$f }
 lappend srcs {*}[glob $root/rtl/mem/*.sv $root/rtl/bus/obi_*.sv $root/rtl/bus/apb_mux.sv \
-                       $root/rtl/periph/*.sv] $root/rtl/soc_top.sv $root/fpga/basys3_top.sv
+                       $root/rtl/periph/*.sv $root/rtl/bus/obi2axil.sv $root/rtl/accel/*.sv \
+                       $root/rtl/accel/p1/*.sv] $root/rtl/soc_top.sv $root/fpga/basys3_top.sv
 read_verilog -sv $srcs
+set_property include_dirs [list $root/rtl/accel/p1] [current_fileset]
 read_xdc $root/fpga/basys3.xdc
 set_property generic "INIT_FILE=[file normalize $out/firmware.hex]" [current_fileset]
 synth_design -top basys3_top -part xc7a35tcpg236-1 -define SYNTHESIS

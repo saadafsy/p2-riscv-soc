@@ -1,9 +1,12 @@
-// Data-port OBI decoder (spec 5, 7): addr[31:28] 0 = RAM port B, 1 = APB
-// bridge, anything else = internal default slave (reads 0, writes dropped).
+// Data-port OBI decoder (spec 5, 7, 12): addr[31:28] 0 = RAM port B, 1 = APB
+// bridge, 2 = AXI4-Lite bridge when AXI_EN (else the default slave), anything
+// else = internal default slave (reads 0, writes dropped).
 // One transaction outstanding; the response is routed by the target
 // registered at the handshake. A new request may be forwarded in the cycle
 // the previous response returns, so RAM accesses run back to back.
-module obi_decoder (
+module obi_decoder #(
+  parameter bit AXI_EN = 1'b0
+) (
   input  logic        clk,
   input  logic        rst,
   // OBI slave port (core data port)
@@ -32,9 +35,18 @@ module obi_decoder (
   output logic [3:0]  apb_be,
   output logic [31:0] apb_wdata,
   input  logic        apb_rvalid,
-  input  logic [31:0] apb_rdata
+  input  logic [31:0] apb_rdata,
+  // OBI master port to the AXI4-Lite bridge (unused when !AXI_EN)
+  output logic        axi_req,
+  input  logic        axi_gnt,
+  output logic [31:0] axi_addr,
+  output logic        axi_we,
+  output logic [3:0]  axi_be,
+  output logic [31:0] axi_wdata,
+  input  logic        axi_rvalid,
+  input  logic [31:0] axi_rdata
 );
-  localparam logic [1:0] TgtRam = 2'd0, TgtApb = 2'd1, TgtDef = 2'd2;
+  localparam logic [1:0] TgtRam = 2'd0, TgtApb = 2'd1, TgtDef = 2'd2, TgtAxi = 2'd3;
 
   logic [1:0] tgt, sel_q;
   logic       pend_q;
@@ -46,6 +58,7 @@ module obi_decoder (
     unique case (m_addr[31:28])
       4'h0:    tgt = TgtRam;
       4'h1:    tgt = TgtApb;
+      4'h2:    tgt = AXI_EN ? TgtAxi : TgtDef;
       default: tgt = TgtDef;
     endcase
   end
@@ -53,8 +66,9 @@ module obi_decoder (
   // Responses from a slave that is not the one owed are ignored.
   always_comb begin
     unique case (sel_q)
-      TgtRam:   begin resp = pend_q && ram_rvalid; m_rdata = ram_rdata; end
-      TgtApb:   begin resp = pend_q && apb_rvalid; m_rdata = apb_rdata; end
+      TgtRam:  begin resp = pend_q && ram_rvalid; m_rdata = ram_rdata; end
+      TgtApb:  begin resp = pend_q && apb_rvalid; m_rdata = apb_rdata; end
+      TgtAxi:  begin resp = pend_q && axi_rvalid; m_rdata = axi_rdata; end
       default: begin resp = pend_q && def_rvalid; m_rdata = def_rdata; end
     endcase
   end
@@ -63,12 +77,14 @@ module obi_decoder (
 
   assign ram_req = m_req && can_issue && (tgt == TgtRam);
   assign apb_req = m_req && can_issue && (tgt == TgtApb);
+  assign axi_req = m_req && can_issue && (tgt == TgtAxi);
   assign def_req = m_req && can_issue && (tgt == TgtDef);
 
   always_comb begin
     unique case (tgt)
-      TgtRam:   m_gnt = ram_req && ram_gnt;
-      TgtApb:   m_gnt = apb_req && apb_gnt;
+      TgtRam:  m_gnt = ram_req && ram_gnt;
+      TgtApb:  m_gnt = apb_req && apb_gnt;
+      TgtAxi:  m_gnt = axi_req && axi_gnt;
       default: m_gnt = def_req && def_gnt;
     endcase
   end
@@ -98,6 +114,10 @@ module obi_decoder (
   assign apb_we    = m_we;
   assign apb_be    = m_be;
   assign apb_wdata = m_wdata;
+  assign axi_addr  = m_addr;
+  assign axi_we    = m_we;
+  assign axi_be    = m_be;
+  assign axi_wdata = m_wdata;
 
   obi_default_slave u_def (
     .clk, .rst, .req(def_req), .gnt(def_gnt), .rvalid(def_rvalid), .rdata(def_rdata)

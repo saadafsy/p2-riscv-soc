@@ -4,6 +4,15 @@
 set_property -dict { PACKAGE_PIN W5  IOSTANDARD LVCMOS33 } [get_ports clk100]
 create_clock -name sys_clk -period 10.000 [get_ports clk100]
 
+# MMCM outputs: CLKOUT1 = SoC (62.5 MHz), CLKOUT0 = accelerator (50 MHz).
+# They meet only in the gray-pointer CDC FIFOs and 2-flop synchronizers:
+# bound the crossing paths by the faster period instead of timing them as
+# synchronous.
+set soc_clk   [get_clocks -of_objects [get_pins u_mmcm/CLKOUT1]]
+set accel_clk [get_clocks -of_objects [get_pins u_mmcm/CLKOUT0]]
+set_max_delay -datapath_only -from $soc_clk -to $accel_clk 16.000
+set_max_delay -datapath_only -from $accel_clk -to $soc_clk 16.000
+
 ## Buttons (btnC is the reset)
 set_property -dict { PACKAGE_PIN U18 IOSTANDARD LVCMOS33 } [get_ports btn_c]
 set_property -dict { PACKAGE_PIN T18 IOSTANDARD LVCMOS33 } [get_ports btn_u]

@@ -14,7 +14,13 @@ VERILOG_SOURCES = $(addprefix $(ROOT)/,$(shell cat $(ROOT)/rtl/core/core.f)) \
                   $(ROOT)/rtl/periph/sync2ff.sv $(ROOT)/rtl/periph/sync_fifo.sv \
                   $(ROOT)/rtl/periph/uart_apb.sv $(ROOT)/rtl/periph/gpio_apb.sv \
                   $(ROOT)/rtl/periph/timer_apb.sv $(ROOT)/rtl/periph/simctrl_apb.sv \
+                  $(ROOT)/rtl/bus/obi2axil.sv $(ROOT)/rtl/accel/async_fifo.sv \
+                  $(addprefix $(ROOT)/rtl/accel/p1/,mac_unit.sv matmul_tile.sv exp_lut_1p.sv \
+                    sync_ram.sv online_softmax.sv attention_top.sv) \
+                  $(ROOT)/rtl/accel/attn_seq.sv $(ROOT)/rtl/accel/axil_attn.sv \
                   $(ROOT)/rtl/soc_top.sv
+# p1's files include "rtl/exp_lut.svh" (rtl/accel/p1/README.md).
+EXTRA_ARGS += +incdir+$(ROOT)/rtl/accel/p1
 COCOTB_TOPLEVEL = soc_top
 COCOTB_TEST_MODULES = test_soc
 

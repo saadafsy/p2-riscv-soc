@@ -22,7 +22,9 @@ FIELDS = ["insn", "trap", "intr", "rs1_addr", "rs2_addr", "rs1_rdata", "rs2_rdat
           "rd_addr", "rd_wdata", "pc_rdata", "pc_wdata", "mem_addr", "mem_rmask",
           "mem_wmask", "mem_rdata", "mem_wdata"]
 PERIPH_LO, PERIPH_HI = 0x1000_0000, 0x1000_EFFF
-MAX_CYCLES = int(os.environ.get("MAX_CYCLES", "2000000"))
+ACCEL_LO, ACCEL_HI = 0x2000_0000, 0x2000_FFFF  # accelerator, not modeled by the ISS
+ACCEL_PERIOD_PS = int(os.environ.get("ACCEL_PERIOD_PS", "13698"))  # 73 MHz; sys is 100
+MAX_CYCLES = int(os.environ.get("MAX_CYCLES", "4000000"))
 
 
 def programs():
@@ -56,12 +58,17 @@ def find(handle, *paths):
 async def run_program(dut, hexpath):
     words = [int(l, 16) for l in pathlib.Path(hexpath).read_text().split()]
     dut.rst.value = 1
+    dut.accel_rst.value = 1
     dut.uart_rx.value = 1
     dut.gpio_in.value = 0
     for i in range(1 << 14):
         dut.u_ram.mem[i].value = words[i] if i < len(words) else 0
     for _ in range(5):
         await RisingEdge(dut.clk)
+    for _ in range(3):
+        await RisingEdge(dut.accel_clk)
+    dut.accel_rst.value = 0
+    await RisingEdge(dut.clk)
     dut.rst.value = 0
 
     iss = Iss(auto_irq=False)
@@ -78,7 +85,8 @@ async def run_program(dut, hexpath):
                 cause = int(mcause.value) if mcause is not None else 0x80000007
                 iss.raise_interrupt("external" if (cause & 0x7FFFFFFF) == 11 else "timer")
             exp = vars(iss.step())
-            periph = rtl["mem_rmask"] and PERIPH_LO <= rtl["mem_addr"] <= PERIPH_HI
+            periph = rtl["mem_rmask"] and (PERIPH_LO <= rtl["mem_addr"] <= PERIPH_HI
+                                           or ACCEL_LO <= rtl["mem_addr"] <= ACCEL_HI)
             skip = {"rd_wdata", "mem_rdata"} if (exp.get("nondet") or periph) else set()
             bad = [f for f in FIELDS if f not in skip and rtl[f] != (exp[f] or 0)]
             if rtl["order"] != retired:
@@ -106,6 +114,7 @@ async def run_program(dut, hexpath):
 @cocotb.parametrize(prog=programs())
 async def lockstep(dut, prog):
     cocotb.start_soon(Clock(dut.clk, 10, unit="ns").start())
+    cocotb.start_soon(Clock(dut.accel_clk, ACCEL_PERIOD_PS, unit="ps").start())
     retired, cycles = await run_program(dut, prog)
     dut._log.info(f"{pathlib.Path(prog).stem}: PASS, {retired} instructions in {cycles} "
                   f"cycles (CPI {cycles / max(retired, 1):.2f})")
