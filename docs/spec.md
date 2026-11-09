@@ -262,6 +262,10 @@ formal/     .sby files
 The p1-attention engine (`attention_top`, one attention head, D = 16,
 N = 4..64 in steps of 4, int8 Q1.6 in and out, bit-exact against p1
 `model/attn.py attn_fixed`) as a memory-mapped peripheral at 0x2000_0000.
+`soc_top` parameter `ACCEL_EN` (default 1) can leave the accelerator out:
+0x2000_0000 then behaves like any unmapped range (reads 0, writes
+dropped) and the accelerator interrupt is 0. The Basys 3 top sets it to 0
+because the full SoC needs about 20.7k LUTs, the whole of the XC7A35T.
 
 Sources: `rtl/accel/p1/` holds p1's `mac_unit`, `matmul_tile`,
 `exp_lut_1p`, `sync_ram`, `online_softmax`, `attention_top` byte-identical

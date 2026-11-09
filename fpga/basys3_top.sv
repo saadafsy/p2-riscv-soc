@@ -9,10 +9,15 @@
 // GPIO outputs, and the USB-UART bridge is the SoC UART at 115200 baud. The
 // JTAG debug master is on the USB-JTAG cable through BSCANE2 (USER4); the
 // accelerator clock is gated by a BUFGCE inside soc_top (clk_gate).
+// ACCEL_EN defaults to 0 here: the full SoC with the attention accelerator
+// needs about 20.7k LUTs (openXC7 count), the whole of the XC7A35T's 20,800,
+// and does not route. Without it the SoC fits; ACCEL_EN = 1 suits a larger
+// part such as the Nexys A7-100T.
 module basys3_top #(
     // verilog_lint: waive explicit-parameter-storage-type
     parameter     INIT_FILE = "firmware.hex",
-    parameter int CLK_HZ    = 62_500_000
+    parameter int CLK_HZ    = 62_500_000,
+    parameter bit ACCEL_EN  = 1'b0
 ) (
     input  logic        clk100,
     input  logic        btn_c,      // reset, active high when pressed
@@ -119,7 +124,8 @@ module basys3_top #(
       .INIT_FILE     (INIT_FILE),
       .FINISH_ON_EXIT(1'b0),
       .UART_DIV      (UartDiv),
-      .JTAG_BSCAN    (1'b1)
+      .JTAG_BSCAN    (1'b1),
+      .ACCEL_EN      (ACCEL_EN)
   ) u_soc (
       .clk      (clk),
       .rst      (rst),

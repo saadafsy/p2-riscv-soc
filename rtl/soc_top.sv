@@ -16,7 +16,10 @@ module soc_top #(
     // 1: JTAG through the FPGA's BSCANE2 (FPGA_XC7 only); the tck/tms/tdi/
     // trst pins are then unused and tdo is 0. 0: jtag_tap on the pins.
     parameter bit JTAG_BSCAN     = 1'b0,
-    parameter int BIST_NBG       = 1
+    parameter int BIST_NBG       = 1,
+    // 0: no accelerator (the 0x2000_0000 range then reads 0 and drops writes,
+    // like any unmapped range); for FPGAs too small for it, e.g. the Basys 3.
+    parameter bit ACCEL_EN       = 1'b1
 ) (
     input  logic        clk,
     input  logic        rst,
@@ -131,7 +134,7 @@ module soc_top #(
   logic [ 3:0] axb_be;
   logic [31:0] axb_addr, axb_wdata, axb_rdata;
 
-  obi_decoder #(.AXI_EN(1'b1)) u_dec (
+  obi_decoder #(.AXI_EN(ACCEL_EN)) u_dec (
       .clk(clk), .rst(rst),
       .m_req(dec_req), .m_gnt(dec_gnt), .m_addr(dec_addr), .m_we(dec_we), .m_be(dec_be),
       .m_wdata(dec_wdata), .m_rvalid(dec_rvalid), .m_rdata(dec_rdata),
@@ -154,6 +157,7 @@ module soc_top #(
   clk_gate u_accel_cg (.clk(accel_clk), .en(accel_en_s), .gclk(accel_gclk));
 
   // AXI4-Lite to the accelerator
+  if (ACCEL_EN) begin : g_accel
   logic        awvalid, awready, wvalid, wready, bvalid, bready;
   logic        arvalid, arready, rvalid, rready;
   logic [31:0] awaddr, wdata, araddr, rdata;
@@ -182,6 +186,17 @@ module soc_top #(
       .irq(irq_accel),
       .accel_clk(accel_gclk), .accel_rst(accel_rst)
   );
+  end else begin : g_no_accel
+    // The decoder never selects the AXI port when AXI_EN = 0.
+    assign axb_gnt    = 1'b0;
+    assign axb_rvalid = 1'b0;
+    assign axb_rdata  = 32'd0;
+    assign irq_accel  = 1'b0;
+    // verilator lint_off UNUSEDSIGNAL
+    logic unused_axb;
+    assign unused_axb = ^{axb_req, axb_addr, axb_we, axb_be, axb_wdata, accel_gclk};
+    // verilator lint_on UNUSEDSIGNAL
+  end
 
   // RAM port B: the data bus, or the March C- BIST while it runs
   logic        bist_start, bist_busy, bist_done, bist_fail;

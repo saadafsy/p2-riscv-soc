@@ -29,6 +29,10 @@ vl clk_gate     -DSKY130 $S/sky130_icg.sv rtl/clk/clk_gate.sv
 # shellcheck disable=SC2086
 vl soc_top      $INC $SOC
 # shellcheck disable=SC2086
+vl soc_top      $INC -GACCEL_EN=0 $SOC
+# shellcheck disable=SC2086
+vl basys3_top   $INC -Wno-PINCONNECTEMPTY -DFPGA_XC7 -GACCEL_EN=1 $S/xil_prims.sv $SOC fpga/basys3_top.sv
+# shellcheck disable=SC2086
 vl basys3_top   $INC -Wno-PINCONNECTEMPTY -DFPGA_XC7 $S/xil_prims.sv $SOC fpga/basys3_top.sv
 # shellcheck disable=SC2086
 vl tb_soc_dbg   $INC $SOC rtl/bus/obi_checker.sv tb/socdbg/tb_soc_dbg.sv
