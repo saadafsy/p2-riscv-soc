@@ -14,7 +14,7 @@ ROOT  := $(abspath .)
 N     ?= 100
 SEED  ?= 1
 
-.PHONY: all sw model core periph soc rand socdbg clean
+.PHONY: all sw model core periph soc rand socdbg dft clean
 all: sw model core periph soc rand socdbg
 
 sw:
@@ -44,6 +44,12 @@ socdbg: sw
 	bash tb/socdbg/synth.sh
 	cd formal && sby -f arb_bmc.sby
 	python3 tb/socdbg/run.py
+
+dft:
+	bash dft/run_fault.sh gpio_apb pclk presetn active_low -- rtl/periph/sync2ff.sv rtl/periph/gpio_apb.sv
+	bash dft/run_fault.sh timer_apb pclk presetn active_low -- rtl/periph/timer_apb.sv
+	bash dft/run_fault.sh uart_apb pclk presetn active_low -- rtl/periph/sync2ff.sv rtl/periph/sync_fifo.sv rtl/periph/uart_apb.sv
+	bash dft/run_fault.sh rv32_core_pd clk rst -- $(shell cat rtl/core/core.f) pd/rv32_core/rv32_core_pd.sv
 
 clean:
 	rm -rf build tb/*/sim_build* tb/*/results*.xml formal/*/ tb/socdbg/build
