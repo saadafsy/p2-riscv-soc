@@ -91,7 +91,7 @@ module uart_apb #(
         tx_cnt   <= '0;
         tx       <= 1'b0;
       end
-    end else if (tx_cnt == div_eff - 16'd1) begin
+    end else if (tx_cnt >= div_eff - 16'd1) begin  // >= so a lowered divisor cannot wrap the count
       tx_cnt <= '0;
       if (tx_bit == 4'd9) begin
         tx_busy <= 1'b0;
@@ -128,7 +128,7 @@ module uart_apb #(
         rx_cnt  <= '0;
         rx_bit  <= '0;
       end
-    end else if (rx_cnt == ((rx_bit == 4'd0) ? half_eff - 16'd1 : div_eff - 16'd1)) begin
+    end else if (rx_cnt >= ((rx_bit == 4'd0) ? half_eff - 16'd1 : div_eff - 16'd1)) begin
       rx_cnt <= '0;
       if (rx_bit == 4'd0) begin
         if (rx_s) rx_busy <= 1'b0;  // glitch, not a start bit
@@ -145,7 +145,7 @@ module uart_apb #(
   end
 
   logic rx_stop_ok;
-  assign rx_stop_ok = rx_busy && (rx_bit == 4'd9) && (rx_cnt == div_eff - 16'd1) && rx_s;
+  assign rx_stop_ok = rx_busy && (rx_bit == 4'd9) && (rx_cnt >= div_eff - 16'd1) && rx_s;
   // A frame with a bad stop bit is discarded.
   assign rxf_push  = rx_stop_ok;
   assign rxf_wdata = rx_shift;

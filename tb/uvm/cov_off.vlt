@@ -1,0 +1,8 @@
+`verilator_config
+// Code coverage (line/toggle) only for the RTL under test: not for the UVM
+// library or the bench's interfaces/top. Covergroups in p2_uvm_pkg stay on.
+coverage_off -file "*/uvm/1800.2-2017-1.0/*"
+coverage_off -file "*/tb/uvm/obi_if.sv"
+coverage_off -file "*/tb/uvm/apb_if.sv"
+coverage_off -file "*/tb/uvm/tb_top.sv"
+coverage_off -file "*/tb/uvm/apb_sub_wrap.sv"
