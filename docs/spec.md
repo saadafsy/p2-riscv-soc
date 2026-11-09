@@ -1,7 +1,7 @@
 # p2-riscv-soc: specification
 
 A small RISC-V SoC for the Digilent Basys 3 (Artix-7 XC7A35T, 100 MHz
-board clock): a 5-stage pipelined RV32I core with machine-mode CSRs and
+board clock): a 5-stage pipelined RV32IM core with machine-mode CSRs and
 interrupts, on-chip RAM, an OBI interconnect, an AMBA APB peripheral bus
 (UART, GPIO, timer, simulation control), C firmware built with clang, and
 a Python instruction-set simulator as the golden model.
@@ -22,11 +22,21 @@ the spec changes first.
 
 ## 2. ISA
 
-RV32I base (all 37 user instructions plus FENCE as a no-op), Zicsr, and
-machine mode only.
+RV32I base (all 37 user instructions plus FENCE as a no-op), the M
+extension, Zicsr, and machine mode only.
+
+M extension (OP opcode 0110011, funct7 = 0000001, funct3 selects): MUL
+(000, low 32 bits of rs1 * rs2), MULH (001, high 32 bits, both signed),
+MULHSU (010, high 32 bits, rs1 signed, rs2 unsigned), MULHU (011, high
+32 bits, both unsigned), DIV (100), DIVU (101), REM (110), REMU (111).
+Division rounds toward zero; the remainder has the sign of the dividend.
+No M instruction traps. Divide by zero: DIV and DIVU return all ones
+(0xFFFF_FFFF), REM and REMU return the dividend. Signed overflow
+(rs1 = 0x8000_0000, rs2 = -1): DIV returns 0x8000_0000, REM returns 0.
+Other funct7 values on OP are still illegal.
 
 CSRs implemented: `mstatus` (MIE, MPIE; MPP reads as 2'b11), `misa`
-(read-only, RV32I), `mie` (MTIE bit 7, MEIE bit 11), `mip` (MTIP, MEIP,
+(read-only, 0x4000_1100: MXL = 32, I and M), `mie` (MTIE bit 7, MEIE bit 11), `mip` (MTIP, MEIP,
 read-only, reflect the irq inputs), `mtvec` (direct mode only, low 2 bits
 read as 0), `mscratch`, `mepc` (bit 0 and 1 read as 0), `mcause`, `mtval`,
 `mcycle`/`mcycleh`, `minstret`/`minstreth` (writable), read-only shadows
@@ -80,6 +90,32 @@ predict-not-taken; a taken branch flushes IF and ID (2-cycle penalty).
 CSR instructions and MRET execute in EX and serialize the pipeline
 (younger instructions flushed, refetch). Traps and interrupts are taken
 at the MEM/WB boundary of the instruction they attach to (precise).
+
+M instructions execute in EX in `rv32_muldiv` and hold EX (and so IF and
+ID) until the result is ready; older instructions in MEM and WB keep
+moving. The unit captures its operands (after forwarding) in the first EX
+cycle in which MEM is not stalled, so a load followed by an M consumer
+costs the usual one load-use stall. Latency, counted as cycles the
+instruction spends in EX on an unstalled pipeline:
+- MUL, MULH, MULHSU, MULHU: 4 (operands registered as 33-bit signed
+  values; four 17 x 17 partial products registered; carry-save step,
+  64-bit add and high/low word select registered; result into EX/MEM),
+  so 3 stall cycles. In the sky130 flow a single-cycle 33 x 33 multiply
+  measured 13.5 ns and the 3-cycle split 10.2 ns, against about 9 ns for
+  the rest of the core, hence 4 cycles.
+- DIV, DIVU, REM, REMU: 34 (operand magnitudes registered, 32 radix-2
+  restoring steps, then sign fix into EX/MEM), so 33 stall cycles. The
+  latency does not depend on the operands.
+The result is written to EX/MEM like an ALU result and forwarded from
+there, so back-to-back dependent M instructions need no extra stall
+beyond the latency above. An interrupt that becomes pending while an M
+instruction is in EX is taken at once: the instruction is abandoned
+(mepc = its pc, no state changed) and executes again from the start after
+MRET. A flush (trap commit) also abandons the operation. Consequence: a
+divide only completes if no interrupt is taken during its 34 cycles, so
+software that re-enables interrupts must not let a new one become pending
+within 34 cycles of every MRET (true for any handler that clears its
+source, since MIE stays 0 until MRET).
 
 RVFI semantics follow riscv-formal: `rvfi_valid` pulses once per retired
 instruction (including a trapping one, with `rvfi_trap = 1`, `rd_addr =
@@ -175,7 +211,7 @@ External interrupt line to the core = UART irq OR accelerator irq (section 12).
 ## 9. Software
 
 Toolchain: lowRISC clang in `~/tools/riscv/bin` (`riscv32-unknown-elf-clang`,
-`-march=rv32i_zicsr -mabi=ilp32`, lld). `sw/common/`: `crt0.S` (sets sp
+`-march=rv32im_zicsr -mabi=ilp32`, lld). `sw/common/`: `crt0.S` (sets sp
 to the top of RAM, clears .bss, copies nothing since code runs from RAM,
 calls `main`, writes the return value to SIMCTRL EXIT, then loops),
 `link.ld` (everything in RAM at 0x0), `soc.h` (register map), small
@@ -189,7 +225,7 @@ SIMCTRL EXIT.
 ## 10. Golden model and verification
 
 `model/rv32_iss.py`: an instruction-set simulator for exactly section 2
-(RV32I + Zicsr + M-mode traps and interrupts) and the memory map
+(RV32IM + Zicsr + M-mode traps and interrupts) and the memory map
 (RAM, SIMCTRL; UART TX modeled as a byte sink), loading the same `.hex`.
 It produces the same retirement trace fields as RVFI. Testbenches run
 the RTL and the ISS in lockstep on the RVFI trace and fail on the first

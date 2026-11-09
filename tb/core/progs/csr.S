@@ -21,8 +21,8 @@ START
   // field rules
   TEST(10); li t0, 0x1003; csrw mtvec, t0; csrr a0, mtvec; CHECK(a0, 0x1000)
   TEST(11); li t0, 0x1237; csrw mepc, t0;  csrr a0, mepc;  CHECK(a0, 0x1234)
-  TEST(12); csrr a0, misa; CHECK(a0, 0x40000100)
-  li t0, -1; csrw misa, t0; csrr a0, misa; CHECK(a0, 0x40000100)
+  TEST(12); csrr a0, misa; CHECK(a0, 0x40001100)
+  li t0, -1; csrw misa, t0; csrr a0, misa; CHECK(a0, 0x40001100)
   TEST(13); csrr a0, mhartid; CHECK(a0, 0)
   csrr a0, mvendorid; CHECK(a0, 0)
   csrr a0, marchid; CHECK(a0, 0)

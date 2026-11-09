@@ -96,6 +96,53 @@ def test_x0_reads_zero_and_rs_fields():
     assert (rec.rs1_addr, rec.rs1_rdata, rec.rd_wdata) == (0, 0, 0)
 
 
+# --------------------------------------------------------------------------- M extension
+INT_MIN = 0x80000000
+# Expected values worked out by hand from the RISC-V M definitions (spec section 2).
+M_CASES = [
+    ("mul", 3, 7, 21), ("mul", M32, M32, 1), ("mul", INT_MIN, 2, 0), ("mul", 0x10000, 0x10000, 0),
+    ("mul", 0x7FFFFFFF, 0x7FFFFFFF, 1), ("mul", M32, 5, 0xFFFFFFFB), ("mul", 0, M32, 0),
+    ("mulh", M32, M32, 0), ("mulh", INT_MIN, INT_MIN, 0x40000000),
+    ("mulh", INT_MIN, 0x7FFFFFFF, 0xC0000000), ("mulh", M32, 1, M32),
+    ("mulh", 0x7FFFFFFF, 0x7FFFFFFF, 0x3FFFFFFF), ("mulh", 2, 3, 0), ("mulh", INT_MIN, 1, M32),
+    ("mulhsu", M32, M32, M32), ("mulhsu", INT_MIN, M32, INT_MIN), ("mulhsu", 1, M32, 0),
+    ("mulhsu", 0x7FFFFFFF, M32, 0x7FFFFFFE), ("mulhsu", 0xFFFFFFFE, 3, M32),
+    ("mulhsu", 2, INT_MIN, 1),
+    ("mulhu", M32, M32, 0xFFFFFFFE), ("mulhu", INT_MIN, 2, 1), ("mulhu", INT_MIN, INT_MIN, 0x40000000),
+    ("mulhu", 5, 7, 0), ("mulhu", M32, 1, 0),
+    ("div", 20, 6, 3), ("div", -20, 6, 0xFFFFFFFD), ("div", 20, -6, 0xFFFFFFFD), ("div", -20, -6, 3),
+    ("div", 5, 0, M32), ("div", -5, 0, M32), ("div", INT_MIN, M32, INT_MIN), ("div", INT_MIN, 1, INT_MIN),
+    ("div", 0, 5, 0), ("div", 7, 7, 1), ("div", 1, M32, M32), ("div", -7, 2, 0xFFFFFFFD),
+    ("divu", 20, 6, 3), ("divu", M32, 1, M32), ("divu", M32, M32, 1), ("divu", INT_MIN, M32, 0),
+    ("divu", 5, 0, M32), ("divu", 0xFFFFFFFE, 2, 0x7FFFFFFF), ("divu", 0, 0, M32),
+    ("rem", 20, 6, 2), ("rem", -20, 6, 0xFFFFFFFE), ("rem", 20, -6, 2), ("rem", -20, -6, 0xFFFFFFFE),
+    ("rem", 5, 0, 5), ("rem", -5, 0, 0xFFFFFFFB), ("rem", INT_MIN, M32, 0),
+    ("rem", INT_MIN, 3, 0xFFFFFFFE), ("rem", -7, 2, M32),
+    ("remu", 20, 6, 2), ("remu", M32, 0, M32), ("remu", M32, 10, 5), ("remu", INT_MIN, M32, INT_MIN),
+    ("remu", 7, 7, 0), ("remu", 0, 0, 0),
+]
+
+
+@pytest.mark.parametrize("op,a,b_,exp", M_CASES)
+def test_m_ext(op, a, b_, exp):
+    a, b_ = a & M32, b_ & M32
+    iss, rec = run1(E.r(op, 3, 1, 2), {1: a, 2: b_})
+    assert (rec.rd_addr, rec.rd_wdata) == (3, exp), f"{op} {a:#x}, {b_:#x}"
+    assert (rec.rs1_addr, rec.rs1_rdata, rec.rs2_addr, rec.rs2_rdata) == (1, a, 2, b_)
+    assert rec.pc_wdata == 4 and not rec.trap and iss.minstret == 1
+
+
+def test_m_ext_rd_eq_rs_and_x0():
+    _, rec = run1(E.r("mul", 1, 1, 1), {1: 9})
+    assert (rec.rd_addr, rec.rd_wdata) == (1, 81)
+    iss, rec = run1(E.r("div", 0, 1, 2), {1: 9, 2: 0})
+    assert iss.x[0] == 0 and rec.rd_addr == 0 and rec.rd_wdata == 0 and not rec.trap
+
+
+def test_misa_has_m():
+    assert MISA == 0x40001100
+
+
 # --------------------------------------------------------------------------- control flow
 BR = [("beq", 1, 1, True), ("beq", 1, 2, False), ("bne", 1, 2, True), ("bne", 3, 3, False),
       ("blt", M32, 1, True), ("blt", 1, M32, False), ("blt", 5, 5, False),
@@ -337,7 +384,8 @@ def test_mcycle_write_and_cycle_shadow():
 
 
 # --------------------------------------------------------------------------- traps
-ILLEGAL = [0x00000000, 0xFFFFFFFF, 0x0000007F, 0x0000100F, 0x02109093, 0x40001093, 0x022081B3,
+ILLEGAL = [0x00000000, 0xFFFFFFFF, 0x0000007F, 0x0000100F, 0x02109093, 0x40001093, 0x042081B3,
+           0x422081B3, 0x022080B3 | (0x3 << 25), 0xFE2081B3,
            0x00003003, 0x00006003, 0x00003023, 0x00002063, 0x00003063, 0x00001067, 0x00200073,
            0x00004073, 0x30200074, 0x10200073, 0x7FF00073,
            0x40007033, 0x40001033, 0x00009013 | (0x10 << 25)]

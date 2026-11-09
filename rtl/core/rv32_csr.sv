@@ -36,7 +36,7 @@ module rv32_csr (
     known = 1'b1;
     unique case (addr)
       12'h300: rdata = {19'b0, 2'b11, 3'b0, mstatus_mpie, 3'b0, mstatus_mie, 3'b0};
-      12'h301: rdata = 32'h4000_0100;  // MXL=32, I
+      12'h301: rdata = 32'h4000_1100;  // MXL=32, I, M
       12'h304: rdata = {20'b0, mie_meie, 3'b0, mie_mtie, 7'b0};
       12'h305: rdata = {mtvec, 2'b00};
       12'h340: rdata = mscratch;

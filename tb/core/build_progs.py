@@ -26,7 +26,7 @@ def build(name: str) -> pathlib.Path:
     deps = [src, PROGS / "common.h"]
     if binf.exists() and all(binf.stat().st_mtime >= d.stat().st_mtime for d in deps):
         return binf
-    subprocess.run([tool("riscv32-unknown-elf-clang"), "-march=rv32i_zicsr", "-mabi=ilp32",
+    subprocess.run([tool("riscv32-unknown-elf-clang"), "-march=rv32im_zicsr", "-mabi=ilp32",
                     "-mno-relax", "-nostdlib", "-static", "-Wl,-Ttext=0", "-Wl,-e,_start",
                     f"-I{PROGS}", "-o", str(elf), str(src)], check=True)
     subprocess.run([tool("riscv32-unknown-elf-objcopy"), "-O", "binary", str(elf), str(binf)],

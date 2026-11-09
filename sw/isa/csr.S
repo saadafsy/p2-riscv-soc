@@ -49,10 +49,10 @@ TEST_BEGIN
 
     li    TESTNUM, 11
     csrr  x3, misa
-    CHECK x3, 0x40000100
+    CHECK x3, 0x40001100
     csrw  misa, x0                  // ignored
     csrr  x3, misa
-    CHECK x3, 0x40000100
+    CHECK x3, 0x40001100
     li    TESTNUM, 12
     csrr  x3, mhartid
     CHECK x3, 0

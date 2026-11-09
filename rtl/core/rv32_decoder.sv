@@ -1,4 +1,4 @@
-// RV32I + Zicsr + MRET/WFI decoder. Register addresses of unused operands
+// RV32IM + Zicsr + MRET/WFI decoder. Register addresses of unused operands
 // are forced to 0 so hazard checks and the RVFI trace need no extra gating.
 module rv32_decoder (
     input  logic [31:0] insn,
@@ -18,6 +18,7 @@ module rv32_decoder (
     output logic        is_store,
     output logic        is_csr,
     output logic        is_mret,
+    output logic        is_md,      // M extension, funct3 selects the operation
     output logic        illegal,
     output logic        is_ecall,
     output logic        is_ebreak
@@ -66,6 +67,7 @@ module rv32_decoder (
     is_store  = 1'b0;
     is_csr    = 1'b0;
     is_mret   = 1'b0;
+    is_md     = 1'b0;
     is_ecall  = 1'b0;
     is_ebreak = 1'b0;
     illegal   = 1'b0;
@@ -135,7 +137,8 @@ module rv32_decoder (
         use2    = 1'b1;
         wr      = 1'b1;
         alu_op  = {funct7[5], funct3};
-        illegal = !(funct7 == 7'b0000000 ||
+        is_md   = funct7 == 7'b0000001;
+        illegal = !(funct7 == 7'b0000000 || funct7 == 7'b0000001 ||
                     (funct7 == 7'b0100000 && (funct3 == 3'b000 || funct3 == 3'b101)));
       end
       OpFence: begin
@@ -174,6 +177,7 @@ module rv32_decoder (
       is_store  = 1'b0;
       is_csr    = 1'b0;
       is_mret   = 1'b0;
+      is_md     = 1'b0;
       is_ecall  = 1'b0;
       is_ebreak = 1'b0;
     end

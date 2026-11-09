@@ -9,9 +9,11 @@ make -C sw hello             # one program
 make -C sw asm SRC=/abs/x.S NAME=x
 ```
 
-Toolchain: lowRISC clang in `~/tools/riscv/bin`, `-march=rv32i_zicsr -mabi=ilp32`,
-lld, `-mno-relax`, freestanding (no libc; `common/rt.S` supplies `__mulsi3`,
-`__udivsi3`, `__umodsi3`, `__divsi3`, `__modsi3`, `memset`, `memcpy`).
+Toolchain: lowRISC clang in `~/tools/riscv/bin`, `-march=rv32im_zicsr -mabi=ilp32`
+(override with `MARCH=rv32i_zicsr` for a build without M), lld, `-mno-relax`,
+freestanding (no libc; `common/rt.S` supplies `memset`, `memcpy` and the
+`__mulsi3`, `__udivsi3`, `__umodsi3`, `__divsi3`, `__modsi3` helpers that clang
+calls only when M is off).
 
 Each program `<name>` produces `build/sw/<name>/<name>.{elf,bin,hex,dis}`:
 
@@ -29,7 +31,8 @@ Each program `<name>` produces `build/sw/<name>/<name>.{elf,bin,hex,dis}`:
 | `common/link.ld` | everything in RAM at 0x0, `.text.init` first |
 | `common/soc.h` | register map (spec 5, 8, 13), CSR helpers, `sim_exit`, `sim_putc` |
 | `common/uart.c`, `gpio.c`, `timer.c` | drivers |
-| `common/printf.c` | `printf` with `%d %i %u %x %X %p %s %c %%`, zero pad and width |
+| `common/printf.c` | `printf` with `%d %i %u %x %X %p %s %c %%`, zero pad and width, `l` accepted |
+| `coremark/` | CoreMark port (`core_portme.c/h`) for `third_party/coremark`, see below |
 | `isa/*.S` | self-checking ISA tests, one per group; `isa/isa.h` macros |
 | `c/hello.c` | prints via UART and SIMCTRL PUTC |
 | `c/timer_irq.c` | 5 periodic machine-timer interrupts |
@@ -42,10 +45,23 @@ default ends the run with EXIT = `0xE0000000 | mcause[7:0]`.
 
 ## ISA tests
 
-`alu_reg alu_imm lui_auipc branch jump load store csr trap irq`. x28 holds the test
+`alu_reg alu_imm lui_auipc branch jump load store csr trap irq muldiv`. x28 holds the test
 number; each test ends with SIMCTRL EXIT = 0 (pass) or the failing test number (an
 unexpected trap fails the current test). `irq` uses the TIMER and bounded polling loops,
 so it passes whether mtime counts clock cycles or instructions.
+
+## CoreMark
+
+```
+make -C sw coremark MARCH=rv32im_zicsr CM_ITER=2   # -> build/coremark/rv32im_zicsr_it2/
+make -C sw coremark MARCH=rv32i_zicsr  CM_ITER=2   # same without M
+make -C tb/soc PROG_DIR=$PWD/build/coremark SIM_BUILD=sim_build_cm \
+  COCOTB_RESULTS_FILE=results_cm.xml MAX_CYCLES=8000000
+```
+
+Measured in the lockstep SoC simulation, 2 iterations: 2.267 CoreMark/MHz with M
+(882,317 cycles), 0.962 without (2,079,305 cycles). Not an official score (runs far
+under the required 10 s); details and the port in `docs/coremark.md`.
 
 ## Golden model
 

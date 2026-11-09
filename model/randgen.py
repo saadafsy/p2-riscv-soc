@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Random RV32I program generator (assembly for clang) for ISS/RTL lockstep runs.
+"""Random RV32IM program generator (assembly for clang) for ISS/RTL lockstep runs.
 
 Programs always terminate: control flow only goes forward, except bounded loops whose
 counter (x30) the body never writes. Loads and stores use base x31 = DATA_BASE + 0x800,
@@ -22,10 +22,11 @@ SIG_BASE = 0x9000
 SIMCTRL_EXIT = 0x1000F000
 
 DEFAULT_MIX = dict(alu=30, imm=20, upper=4, load=12, store=10, branch=10, jal=3, jalr=3,
-                   csr=3, misc=2, trap=3)
+                   csr=3, misc=2, trap=3, muldiv=8)
 R_OPS = ["add", "sub", "sll", "slt", "sltu", "xor", "srl", "sra", "or", "and"]
 I_OPS = ["addi", "slti", "sltiu", "xori", "ori", "andi"]
 SH_OPS = ["slli", "srli", "srai"]
+M_OPS = ["mul", "mulh", "mulhsu", "mulhu", "div", "divu", "rem", "remu"]
 BR_OPS = ["beq", "bne", "blt", "bge", "bltu", "bgeu"]
 LOADS = {"lb": 1, "lbu": 1, "lh": 2, "lhu": 2, "lw": 4}
 STORES = {"sb": 1, "sh": 2, "sw": 4}
@@ -65,6 +66,15 @@ class Gen:
         fwd = lambda: lbl(r.randint(idx + 1, min(nitems, idx + 8)))  # noqa: E731
         if kind == "alu":
             return [f"{r.choice(R_OPS)} {self.rd()}, {self.rs()}, {self.rs()}"]
+        if kind == "muldiv":
+            # Mostly random registers; sometimes a zero divisor (x0) or a chain on rd.
+            op, d = r.choice(M_OPS), self.rd()
+            t = r.random()
+            if t < 0.15:
+                return [f"{op} {d}, {self.rs()}, x0"]
+            if t < 0.3 and d != "x0":
+                return [f"{op} {d}, {self.rs()}, {self.rs()}", f"{r.choice(M_OPS)} {self.rd()}, {d}, {d}"]
+            return [f"{op} {d}, {self.rs()}, {self.rs()}"]
         if kind == "imm":
             if r.random() < 0.3:
                 return [f"{r.choice(SH_OPS)} {self.rd()}, {self.rs()}, "
@@ -97,7 +107,7 @@ class Gen:
             if t in ("ecall", "ebreak"):
                 return [t]
             if t == "illegal":
-                return [f".word {r.choice([0, 0xFFFFFFFF, 0x0000100F, 0x02000033, 0x00003003]):#010x}"]
+                return [f".word {r.choice([0, 0xFFFFFFFF, 0x0000100F, 0x04000033, 0x00003003]):#010x}"]
             if t == "lmis":
                 op = r.choice(["lh", "lhu", "lw"])
                 return [f"{op} {self.rd()}, {self.mem_off(LOADS[op], True)}(x31)"]

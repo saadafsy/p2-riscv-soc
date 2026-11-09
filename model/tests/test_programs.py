@@ -47,7 +47,7 @@ def test_isa_passes(name):
 
 def test_isa_groups_present():
     assert set(ISA) >= {"alu_reg", "alu_imm", "lui_auipc", "branch", "jump", "load", "store",
-                        "csr", "trap", "irq"}
+                        "csr", "trap", "irq", "muldiv"}
 
 
 @pytest.mark.parametrize("name", ISA)
@@ -60,7 +60,7 @@ def test_hello():
     iss, code = run("hello")
     assert code == 0
     assert iss.console_text.startswith("Hello from p2-riscv-soc!\n")
-    assert "misa=40000100 mhartid=0 dec=-1234 hex=beef str=ok" in iss.console_text
+    assert "misa=40001100 mhartid=0 dec=-1234 hex=beef str=ok" in iss.console_text
     assert bytes(iss.uart_tx).decode() == iss.console_text
 
 
@@ -93,6 +93,7 @@ orig_alu = Iss._alu
 orig_trap = Iss._enter_trap
 orig_csr_write = Iss._csr_write
 orig_bus_write = Iss._bus_write
+orig_muldiv = Iss._muldiv
 
 
 def _bug_mpie(self, cause, tval, epc):
@@ -122,6 +123,11 @@ MUTANTS = {
     "mepc": ("_enter_trap", _bug_mepc, "trap"),
     "mie_mask": ("_csr_write", _bug_mie_mask, "csr"),
     "sb_lane": ("_bus_write", _bug_sb_lane, "store"),
+    # MULHSU treating rs2 as signed, and REM by zero returning 0
+    "mulhsu": ("_muldiv", staticmethod(lambda f3, a, b_: orig_muldiv(1 if f3 == 2 else f3, a, b_)),
+               "muldiv"),
+    "rem0": ("_muldiv", staticmethod(lambda f3, a, b_: 0 if f3 == 6 and b_ == 0
+                                     else orig_muldiv(f3, a, b_)), "muldiv"),
 }
 
 

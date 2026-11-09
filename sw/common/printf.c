@@ -59,6 +59,7 @@ int printf(const char *fmt, ...) {
       fmt++;
     }
     while (*fmt >= '0' && *fmt <= '9') width = width * 10 + (*fmt++ - '0');
+    if (*fmt == 'l') fmt++;  // long is 32 bits (ilp32)
     switch (*fmt) {
       case 'd':
       case 'i': {

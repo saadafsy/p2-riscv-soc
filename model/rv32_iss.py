@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""RV32I + Zicsr machine-mode ISS for p2-riscv-soc (docs/spec.md sections 2, 3, 5, 8).
+"""RV32IM + Zicsr machine-mode ISS for p2-riscv-soc (docs/spec.md sections 2, 3, 5, 8).
 
 Golden model for the RTL lockstep bench. One step() = one RVFI record.
 
@@ -33,7 +33,7 @@ M32 = 0xFFFFFFFF
 M64 = (1 << 64) - 1
 RAM_SIZE = 0x10000
 RAM_WORDS = RAM_SIZE // 4
-MISA = 0x40000100  # MXL=1 (32-bit), I
+MISA = 0x40001100  # MXL=1 (32-bit), I, M
 
 UART_BASE, GPIO_BASE, TIMER_BASE, SIMCTRL_BASE = 0x10000000, 0x10001000, 0x10002000, 0x1000F000
 ACCEL_LO, ACCEL_HI = 0x20000000, 0x2000FFFF  # reads nondet, writes dropped
@@ -507,7 +507,9 @@ class Iss:
                 res = self._alu(f3, a, imm_i & M32)
         elif op == 0x33:  # OP
             a, b = src1(), src2()
-            if f7 == 0x20 and f3 in (0, 5):
+            if f7 == 1:
+                res = self._muldiv(f3, a, b)
+            elif f7 == 0x20 and f3 in (0, 5):
                 res = (a - b) & M32 if f3 == 0 else (sext(a, 32) >> (b & 31)) & M32
             elif f7 == 0:
                 if f3 == 1:
@@ -573,6 +575,30 @@ class Iss:
             return a | b
         return a & b  # f3 == 7
 
+    @staticmethod
+    def _muldiv(f3, a, b):
+        """M extension (spec section 2): f3 = MUL MULH MULHSU MULHU DIV DIVU REM REMU."""
+        sa, sb = sext(a, 32), sext(b, 32)
+        if f3 == 0:
+            return (a * b) & M32
+        if f3 == 1:
+            return ((sa * sb) >> 32) & M32
+        if f3 == 2:
+            return ((sa * b) >> 32) & M32
+        if f3 == 3:
+            return (a * b) >> 32
+        if f3 in (5, 7):  # unsigned; x / 0 = all ones, x % 0 = x
+            if b == 0:
+                return M32 if f3 == 5 else a
+            return a // b if f3 == 5 else a % b
+        if b == 0:
+            return M32 if f3 == 4 else a
+        # Truncating division on magnitudes; INT_MIN / -1 wraps to INT_MIN, remainder 0.
+        q = abs(sa) // abs(sb)
+        if (sa < 0) != (sb < 0):
+            q = -q
+        return q & M32 if f3 == 4 else (sa - q * sb) & M32
+
 
 def format_record(r):
     s = (f"{r.order:6d} pc={r.pc_rdata:08x} insn={r.insn:08x} -> {r.pc_wdata:08x}"
@@ -589,7 +615,7 @@ def format_record(r):
 
 
 def main(argv=None):
-    ap = argparse.ArgumentParser(description="Run a program on the RV32I ISS.")
+    ap = argparse.ArgumentParser(description="Run a program on the RV32IM ISS.")
     ap.add_argument("program", help=".hex ($readmemh words) or .elf")
     ap.add_argument("--max-steps", type=int, default=10_000_000)
     ap.add_argument("--cycles-per-step", type=int, default=1,

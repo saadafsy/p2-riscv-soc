@@ -22,6 +22,7 @@ smtbmc boolector
 [script]
 bmc_fast: read -define FAST_MEM
 read -formal rv32_alu.sv rv32_decoder.sv rv32_regfile.sv rv32_csr.sv rv32_hazard.sv
+read -formal rv32_muldiv.sv
 read -formal rv32_fetch.sv rv32_core.sv core_bmc.sv
 prep -top core_bmc
 
@@ -31,6 +32,7 @@ prep -top core_bmc
 ../rtl/core/rv32_regfile.sv
 ../rtl/core/rv32_csr.sv
 ../rtl/core/rv32_hazard.sv
+../rtl/core/rv32_muldiv.sv
 ../rtl/core/rv32_fetch.sv
 ../rtl/core/rv32_core.sv
 core_bmc.sv

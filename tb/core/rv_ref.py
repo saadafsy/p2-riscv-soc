@@ -48,7 +48,7 @@ class RefModel:
     def csr_read(self, a):
         mstatus = (3 << 11) | (self.mpie << 7) | (self.mie_b << 3)
         table = {
-            0x300: mstatus, 0x301: 0x40000100,
+            0x300: mstatus, 0x301: 0x40001100,
             0x304: (self.meie << 11) | (self.mtie << 7),
             0x305: self.mtvec, 0x340: self.mscratch, 0x341: self.mepc,
             0x342: self.mcause, 0x343: self.mtval,
@@ -192,6 +192,20 @@ class RefModel:
             lanes = ((1 << size) - 1) << (addr & 3)
             r.update(mem_addr=addr & ~3, mem_wmask=lanes, mem_wdata=(data << (8 * (addr & 3))) & M32)
             self.wr(addr, size, data)
+        elif op == 0x33 and f7 == 1:
+            a, b = use1(), use2()
+            sa, sb = sx(a, 32), sx(b, 32)
+            if f3 < 4:
+                x_, y_ = {0: (a, b), 1: (sa, sb), 2: (sa, b), 3: (a, b)}[f3]
+                p = (x_ * y_) & ((1 << 64) - 1)
+                result = p & M32 if f3 == 0 else p >> 32
+            elif b == 0:
+                result = M32 if f3 in (4, 5) else a
+            elif f3 in (5, 7):
+                result = a // b if f3 == 5 else a % b
+            else:
+                q = abs(sa) // abs(sb) * (1 if (sa < 0) == (sb < 0) else -1)
+                result = (q if f3 == 4 else sa - q * sb) & M32
         elif op in (0x13, 0x33):
             if op == 0x13:
                 if (f3 == 1 and f7 != 0) or (f3 == 5 and f7 not in (0, 0x20)):

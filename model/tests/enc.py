@@ -1,8 +1,10 @@
-"""Minimal RV32I/Zicsr encoder for ISS unit tests."""
+"""Minimal RV32IM/Zicsr encoder for ISS unit tests."""
 M32 = 0xFFFFFFFF
 
 R_OPS = {"add": (0, 0), "sub": (0, 0x20), "sll": (1, 0), "slt": (2, 0), "sltu": (3, 0),
-         "xor": (4, 0), "srl": (5, 0), "sra": (5, 0x20), "or": (6, 0), "and": (7, 0)}
+         "xor": (4, 0), "srl": (5, 0), "sra": (5, 0x20), "or": (6, 0), "and": (7, 0),
+         "mul": (0, 1), "mulh": (1, 1), "mulhsu": (2, 1), "mulhu": (3, 1), "div": (4, 1),
+         "divu": (5, 1), "rem": (6, 1), "remu": (7, 1)}
 I_OPS = {"addi": 0, "slti": 2, "sltiu": 3, "xori": 4, "ori": 6, "andi": 7}
 SH_OPS = {"slli": (1, 0), "srli": (5, 0), "srai": (5, 0x20)}
 B_OPS = {"beq": 0, "bne": 1, "blt": 4, "bge": 5, "bltu": 6, "bgeu": 7}

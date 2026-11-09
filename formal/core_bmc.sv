@@ -21,6 +21,7 @@ module core_bmc (
   logic [31:0] rvfi_pc_rdata, rvfi_pc_wdata, rvfi_mem_addr, rvfi_mem_rdata, rvfi_mem_wdata;
   logic [4:0] rvfi_rs1_addr, rvfi_rs2_addr, rvfi_rd_addr;
   logic [3:0] rvfi_mem_rmask, rvfi_mem_wmask;
+  logic f_md_busy;
 
   // one-outstanding slaves: i_out / d_out mark a pending response
   logic i_out, d_out;
@@ -57,7 +58,8 @@ module core_bmc (
       .rvfi_rs1_addr, .rvfi_rs2_addr, .rvfi_rd_addr,
       .rvfi_rs1_rdata, .rvfi_rs2_rdata, .rvfi_rd_wdata,
       .rvfi_pc_rdata, .rvfi_pc_wdata,
-      .rvfi_mem_addr, .rvfi_mem_rmask, .rvfi_mem_wmask, .rvfi_mem_rdata, .rvfi_mem_wdata
+      .rvfi_mem_addr, .rvfi_mem_rmask, .rvfi_mem_wmask, .rvfi_mem_rdata, .rvfi_mem_wdata,
+      .f_md_busy
   );
 
   logic [63:0] n_retired;
@@ -78,7 +80,8 @@ module core_bmc (
     end else begin
       past_valid <= 1'b1;
       if (rvfi_valid) n_retired <= n_retired + 64'd1;
-      gap      <= rvfi_valid ? 8'd0 : gap + 8'd1;
+      // M operation cycles are bounded by the asserts in rv32_muldiv
+      gap      <= rvfi_valid ? 8'd0 : f_md_busy ? gap : gap + 8'd1;
       i_held   <= i_req && !i_gnt;
       d_held   <= d_req && !d_gnt;
       i_addr_q <= i_addr;
@@ -117,6 +120,9 @@ module core_bmc (
       cover (rvfi_valid && rvfi_mem_rmask != 4'h0);
       cover (rvfi_valid && rvfi_mem_wmask != 4'h0);
       cover (d_held);
+      // an M instruction retires
+      cover (rvfi_valid && !rvfi_trap && rvfi_insn[6:0] == 7'h33 &&
+             rvfi_insn[31:25] == 7'h01);
     end
   end
 

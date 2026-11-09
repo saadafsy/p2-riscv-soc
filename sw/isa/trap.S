@@ -100,7 +100,7 @@ t12: .word 0x02109093               // slli with imm[5] set
     TRAPPED 2, t12
     li    TESTNUM, 13
     ARM
-t13: .word 0x022081b3               // mul (no M)
+t13: .word 0x042081b3               // OP with funct7 = 2 (not M)
     TRAPPED 2, t13
     li    TESTNUM, 14
     ARM
