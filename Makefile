@@ -59,3 +59,8 @@ perf:
 
 clean:
 	rm -rf build tb/*/sim_build* tb/*/results*.xml formal/*/ tb/socdbg/build
+
+# Board firmware on the UART pin, decoded in simulation (tb/soc/test_board_uart.py)
+board:
+	$(MAKE) -C sw board
+	$(MAKE) -C tb/soc COCOTB_TEST_MODULES=test_board_uart COCOTB_RESULTS_FILE=results_board_uart.xml

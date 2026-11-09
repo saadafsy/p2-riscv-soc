@@ -67,7 +67,8 @@ under `build/` (gitignored), and each doc says how to rerun.
 | Artix-7, Basys 3 (openXC7: yosys + nextpnr) | Full SoC with the accelerator (`ACCEL=1`) routes and meets timing: SoC clock 65.3 MHz post-route against 62.5 MHz, accelerator 72.9 MHz against 50 MHz, JTAG 189 MHz against 12 MHz. Uses 15.3k LUTs (74% of the XC7A35T), 8.7k FFs, 72 of 90 DSP48 (the 16 MAC multipliers are mapped to LUTs; with all 88 in DSPs the route did not converge), 16 RAMB36 + 6 RAMB18. Without the accelerator: 5.1k LUTs, 65.5 MHz. Bitstreams written. nextpnr places on the XC7A50T die that the 35T shares, so whether the bitstream stays inside the 35T's usable area is checked only by a Vivado build (`ACCEL=1 vivado -mode batch -source fpga/build.tcl`, not yet run). |
 
 Not done: running on the board. That needs Vivado, and `fpga/build.tcl` is
-ready. The FPGA-only parts (BSCANE2 JTAG, BUFGCE clock gate) are linted and
+ready. The board firmware (`make board`) is checked in simulation by decoding
+the UART pin: three accelerator runs with 0 mismatches, then PASS. The FPGA-only parts (BSCANE2 JTAG, BUFGCE clock gate) are linted and
 elaborated against the Xilinx cell library but not simulated. Nothing here
 is taped out.
 
@@ -88,6 +89,7 @@ make periph   # bus/peripheral tests, protocol-checker negatives, formal
 make soc      # full SoC vs the ISS on every program
 make rand N=100
 make socdbg   # JTAG / core hold / BIST / clock gate: lint, latch check, formal, SoC tests
+make board    # Basys 3 firmware: accelerator results decoded off the UART pin in simulation
 make -C sw coremark            # then see docs/coremark.md
 make perf                      # C++ model, refit and compare against the RTL
 make dft                       # scan chain + ATPG for the peripherals and the core
