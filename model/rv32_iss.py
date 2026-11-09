@@ -17,7 +17,8 @@ Record conventions (the RTL trace must match these):
 
 Timing model: each step advances mcycle and TIMER mtime by `cycles` (default
 cycles_per_step = 1, i.e. one per retired record). Reads of mcycle/cycle/mip and TIMER
-MTIME are flagged `nondet` since they depend on RTL timing.
+MTIME are flagged `nondet` since they depend on RTL timing, and so are reads of the
+accelerator range 0x2000_0000-0x2000_FFFF, which the ISS does not model (read as 0).
 
 Interrupts: with auto_irq=True (standalone runs) MTIP = mtime >= mtimecmp and MEIP =
 set_external_irq() level, taken between steps when enabled. With auto_irq=False
@@ -35,6 +36,7 @@ RAM_WORDS = RAM_SIZE // 4
 MISA = 0x40000100  # MXL=1 (32-bit), I
 
 UART_BASE, GPIO_BASE, TIMER_BASE, SIMCTRL_BASE = 0x10000000, 0x10001000, 0x10002000, 0x1000F000
+ACCEL_LO, ACCEL_HI = 0x20000000, 0x2000FFFF  # reads nondet, writes dropped
 
 CAUSE_INSN_MISALIGNED = 0
 CAUSE_ILLEGAL = 2
@@ -217,6 +219,9 @@ class Iss:
     def _bus_read(self, addr):
         if addr >> 28 == 0:
             return self.read_word(addr)
+        if ACCEL_LO <= addr <= ACCEL_HI:
+            self._nondet = True  # accelerator (spec 12): not modeled
+            return 0
         if addr >> 28 != 1:
             return 0
         dev, off = (addr >> 12) & 0xF, addr & 0xFFC

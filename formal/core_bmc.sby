@@ -1,0 +1,36 @@
+# rv32_core invariants (see core_bmc.sv). Shortest retirement after reset is
+# cycle 6, so depth 30 covers about two dozen retirements, traps and interrupts.
+#   bmc_fast: always-granting memory, adds the no-deadlock bound
+#   bmc_rand: random gnt and response delays, OBI and RVFI checks
+#   cover:    every cover point reached (shows the asserts are not vacuous)
+[tasks]
+bmc_fast
+bmc_rand
+cover
+
+[options]
+bmc_fast: mode bmc
+bmc_fast: depth 30
+bmc_rand: mode bmc
+bmc_rand: depth 30
+cover: mode cover
+cover: depth 30
+
+[engines]
+smtbmc boolector
+
+[script]
+bmc_fast: read -define FAST_MEM
+read -formal rv32_alu.sv rv32_decoder.sv rv32_regfile.sv rv32_csr.sv rv32_hazard.sv
+read -formal rv32_fetch.sv rv32_core.sv core_bmc.sv
+prep -top core_bmc
+
+[files]
+../rtl/core/rv32_alu.sv
+../rtl/core/rv32_decoder.sv
+../rtl/core/rv32_regfile.sv
+../rtl/core/rv32_csr.sv
+../rtl/core/rv32_hazard.sv
+../rtl/core/rv32_fetch.sv
+../rtl/core/rv32_core.sv
+core_bmc.sv
