@@ -14,18 +14,27 @@ Every instruction the RTL retires is checked against a Python
 instruction-set simulator. The core is also taken through sky130 place and
 route and scan insertion.
 
+**RV32IM, 2.27 CoreMark/MHz** · **every instruction checked against an ISS** · **riscv-formal 52/52** · **sky130 core 119.8 MHz** · **98.4% scan coverage** · **Basys 3 bitstream meeting timing at 62.5 MHz (open-source flow; not yet on a board)**
+
+```mermaid
+flowchart LR
+    CORE["RV32IM core<br/>5-stage pipeline"] --> ARB["OBI arbiter<br/>+ decoder"]
+    JTAG["JTAG TAP<br/>debug master"] --> ARB
+    ARB --> RAM["64 KB RAM<br/>March C- BIST"]
+    ARB --> APB["APB4 bridge"]
+    APB --> PER["UART · GPIO · timer<br/>SYSCTL · SIMCTRL"]
+    ARB --> AXI["AXI4-Lite bridge"]
+    AXI --> CDC["async FIFOs<br/>(clock crossing)"]
+    CDC --> ACC["attention accelerator<br/>(from p1), clock-gated"]
+    CORE -. "instruction port" .-> RAM
 ```
-     +------------------------------ soc_top -------------------------------+
-     |  rv32_core (IF ID EX MEM WB)        JTAG TAP + debug master (tck)     |
-     |     | instr          | data              | OBI                        |
-     |     |                +---- obi_arb2 -----+  (round-robin)             |
-     |     v                         |                                       |
-     |  dp_ram port A          obi_decoder ---> obi2apb (APB4) ---> UART GPIO |
-     |  (64 KB BRAM) port B <-- bist mux  \        TIMER SYSCTL SIMCTRL      |
-     |                 March C- BIST -'    \--> obi2axil -> attention accel  |
-     |                                           (own clock, clock-gated)    |
-     +----------------------------------------------------------------------+
-```
+
+| sky130 layout of the core | Clock tree |
+|:---:|:---:|
+| ![rv32_core layout](docs/img/layout_rv32_core.png) | ![rv32_core clock tree](docs/img/clock_tree_rv32_core.png) |
+| 25.7k cells, 0.66 x 0.66 mm, 119.8 MHz signoff, 0 DRC | 0.06 ns skew |
+
+<sub>OpenROAD after routing and extraction. Placed and routed only; not taped out.</sub>
 
 SYSCTL (0x1000_3000) holds the core in reset for JTAG program loading. It
 also starts the RAM BIST and gates the accelerator clock (docs/spec.md
