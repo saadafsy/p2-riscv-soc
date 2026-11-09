@@ -14,6 +14,14 @@ Every instruction the RTL retires is checked against a Python
 instruction-set simulator. The core is also taken through sky130 place and
 route and scan insertion.
 
+<p align="center">
+<img src="docs/img/layout_rv32_core.png" width="46%" alt="rv32_core sky130 layout">
+&nbsp;
+<img src="docs/img/clock_tree_rv32_core.png" width="46%" alt="rv32_core clock tree">
+</p>
+
+<sub>The core in sky130 after OpenROAD place and route (left; 25.7k cells, 0.66 x 0.66 mm, 119.8 MHz, 0 DRC) and its clock tree (right; 0.06 ns skew). Not taped out.</sub>
+
 ![soc_top block diagram](docs/img/soc_block.svg)
 
 SYSCTL (0x1000_3000) holds the core in reset for JTAG program loading. It
@@ -57,14 +65,6 @@ under `build/` (gitignored), and each doc says how to rerun.
 | DFT | Scan chain plus SAT-based stuck-at ATPG on the core, 98.4% of 117,684 collapsed faults with 3,881 patterns; peripherals 93.6 to 99.3%; chains verified in simulation (dft/README.md) |
 | Performance model | C++ model, calibrated on directed tests. It predicts held-out programs and CoreMark within 0.6% of RTL cycles at about 70 M instructions/s (docs/perf_model.md). |
 | Artix-7, Basys 3 (openXC7: yosys + nextpnr) | Full SoC with the accelerator (`ACCEL=1`) routes and meets timing: SoC clock 65.3 MHz post-route against 62.5 MHz, accelerator 72.9 MHz against 50 MHz, JTAG 189 MHz against 12 MHz. Uses 15.3k LUTs (74% of the XC7A35T), 8.7k FFs, 72 of 90 DSP48 (the 16 MAC multipliers are mapped to LUTs; with all 88 in DSPs the route did not converge), 16 RAMB36 + 6 RAMB18. Without the accelerator: 5.1k LUTs, 65.5 MHz. Bitstreams written. nextpnr places on the XC7A50T die that the 35T shares, so whether the bitstream stays inside the 35T's usable area is checked only by a Vivado build (`ACCEL=1 vivado -mode batch -source fpga/build.tcl`, not yet run). |
-
-The core after place and route (left) and its clock tree (right):
-
-<p align="center">
-<img src="docs/img/layout_rv32_core.png" width="46%" alt="rv32_core sky130 layout">
-&nbsp;
-<img src="docs/img/clock_tree_rv32_core.png" width="46%" alt="rv32_core clock tree">
-</p>
 
 Not done: running on the board. That needs Vivado, and `fpga/build.tcl` is
 ready. The FPGA-only parts (BSCANE2 JTAG, BUFGCE clock gate) are linted and
