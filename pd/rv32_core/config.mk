@@ -8,3 +8,6 @@ export SDC_FILE      = /work/pd/rv32_core/constraint.sdc
 
 export CORE_UTILIZATION = 40
 export PLACE_DENSITY    = 0.60
+# Repair to 80% of the slew/cap limits so the post-route values stay inside them.
+export SLEW_MARGIN = 20
+export CAP_MARGIN  = 20
