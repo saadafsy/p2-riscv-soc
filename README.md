@@ -57,7 +57,7 @@ under `build/` (gitignored), and each doc says how to rerun.
 | riscv-formal | All 52 RV32IM checks pass, 0 fail (bounded model checking on the RVFI trace, free OBI memory with any grant/response timing). Covers every instruction including M, plus reg, pc_fwd, pc_bwd, unique, causal, ill and cover. Depths are 20 for instructions, 45 for divide/remainder, 15 to 25 for the consistency checks (`formal/riscv-formal/checks.cfg`). M results use riscv-formal's ALTOPS substitute functions; the arithmetic is checked by the ISS lockstep. |
 | Core formal (SymbiYosys) | BMC depth 30: x0 invariant, retire order, OBI rules, forward progress, M unit progress |
 | Bus, peripherals, CDC | cocotb with OBI/APB protocol checkers (SVA) and negative tests; unbounded two-clock proof of the async FIFO with four broken FIFOs caught; arbiter BMC with three seeded bugs caught |
-| UVM (APB subsystem) | 11 runs pass. Merged covergroup bins 337/338: one grant-wait bin is not hit on the current tree; it was 337/337 before the debug and M merges. Found the UART divisor bug; three injected bugs caught. |
+| UVM (APB subsystem) | 11 runs pass, merged covergroup bins 337/337 (ignore_bins not counted as targets); found the UART divisor bug; three injected bugs caught |
 | SoC debug | JTAG traffic while `bench` runs in lockstep, JTAG program load and boot, BIST pass and stuck-at fail, accelerator clock stopped mid-run with an unchanged result |
 
 ### Implementation

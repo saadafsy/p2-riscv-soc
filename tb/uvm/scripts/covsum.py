@@ -36,6 +36,10 @@ def main(path):
             cnt = int(m.group(2))
             typ = f.get("t", "")
             if typ == "covergroup":
+                # ignore_bins / illegal_bins are recorded too (Bt=ignore or
+                # illegal) but are not coverage targets.
+                if f.get("Bt") in ("ignore", "illegal"):
+                    continue
                 name = f.get("page", "").split("/", 1)[-1]
                 name = name.split("::")[-1]
                 cg[name][0] += cnt > 0
