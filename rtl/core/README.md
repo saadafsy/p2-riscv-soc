@@ -1,6 +1,6 @@
 # rv32_core
 
-5-stage in-order RV32I + Zicsr core, machine mode only (spec sections 2 and 3).
+5-stage in-order RV32IM + Zicsr core, machine mode only (spec sections 2 and 3).
 
 ```
           +--------+    +--------+    +---------+    +---------+    +--------+
@@ -16,7 +16,7 @@
 
 Files: `rv32_core.sv` (pipeline, stalls, traps, RVFI), `rv32_fetch.sv` (OBI fetch and
 the IF/ID queue), `rv32_decoder.sv`, `rv32_alu.sv`, `rv32_regfile.sv` (write-through),
-`rv32_csr.sv`, `rv32_hazard.sv`; file list `core.f`.
+`rv32_csr.sv`, `rv32_hazard.sv`, `rv32_muldiv.sv` (M extension); file list `core.f`.
 
 ## Hazard and control rules
 
@@ -28,6 +28,15 @@ the IF/ID queue), `rv32_decoder.sv`, `rv32_alu.sv`, `rv32_regfile.sv` (write-thr
   and costs 2 cycles.
 - CSR instructions wait in EX until MEM and WB are empty (so counters read exactly), then
   execute and refetch pc+4. MRET executes in EX and redirects to mepc.
+- M instructions run in `rv32_muldiv` and hold EX (IF and ID wait, MEM and WB drain):
+  multiply 4 cycles in EX (operands registered, four 17 x 17 partial products
+  registered, carry-save step plus 64-bit add and word select registered, then into
+  EX/MEM), divide and remainder 34 cycles (magnitudes registered, 32 radix-2 restoring
+  steps, sign fix). The unit takes its operands from the forwarding muxes in the first
+  EX cycle where MEM is not stalled, so load-use into M is the usual one stall; the
+  result is forwarded from EX/MEM like an ALU result. A pending interrupt releases EX at
+  once: the M instruction carries the interrupt (mepc = its pc) and is re-executed after
+  MRET. A trap commit also drops the operation.
 - Interrupts attach to the instruction leaving EX, which then has no effect. Synchronous
   traps are detected in ID or EX. Both commit when the instruction moves MEM -> WB:
   mepc/mcause/mtval are written, younger instructions are flushed, and fetch restarts at
@@ -58,9 +67,12 @@ are ignored.
 | straight-line dependent ALU chain | CPI 1.00 |
 | load + dependent use | 3 cycles per pair (1 stall) |
 | taken jump | 3 cycles (2-cycle penalty) |
+| dependent MUL chain | 4 cycles each |
+| dependent DIVU chain | 34 cycles each |
 
-Synthesis (yosys `synth_xilinx`): about 3.5k LUTs and 2.8k flops, of which 1024 are the
-register file (every flop is reset, so it is not in LUTRAM). sky130 timing: see
+Synthesis (yosys `synth_xilinx`): about 4.1k LUTs, 3.0k flops (1024 of them the register
+file; every flop is reset, so it is not in LUTRAM) and 4 DSP48E1 for the multiplier;
+without M it was 3.5k LUTs and 2.8k flops. sky130 timing (109 MHz at 10 ns): see
 `synth/README.md`.
 
 ## Tests

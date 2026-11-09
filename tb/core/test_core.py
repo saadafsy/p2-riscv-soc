@@ -23,7 +23,7 @@ sys.path.insert(0, str(PROJ / "model"))
 from rv32_iss import Iss  # noqa: E402
 
 ISA_TESTS = ("alu_imm", "alu_reg", "branch", "csr", "irq", "jump", "load", "lui_auipc",
-             "store", "trap")
+             "store", "trap", "muldiv")
 
 
 def load_hex(path):
@@ -241,12 +241,52 @@ async def test_cpi(dut):
     cpi = h.rate("cpi_start", "cpi_end")
     lu = h.rate("lu_start", "lu_end")
     br = h.rate("br_start", "br_end")
+    mul = h.rate("mul_start", "mul_end")
+    div = h.rate("div_start", "div_end")
     dut._log.info("CPI straight-line dependent ALU chain: %.3f", cpi)
     dut._log.info("load+use pair: %.2f cycles per instruction (1 stall per pair)", lu)
     dut._log.info("taken jump: %.2f cycles each (2-cycle penalty)", br)
+    dut._log.info("dependent MUL chain: %.2f, DIVU chain: %.2f cycles per retire", mul, div)
     assert cpi == 1.0, f"straight-line CPI {cpi}"
     assert lu == 1.5, f"load-use pair costs {lu * 2} cycles, expected 3"
     assert br == 3.0, f"taken jump costs {br} cycles, expected 3"
+    # Retire-to-retire: each M op behind another costs its EX latency, the nop
+    # after the last one follows a cycle later (20 MULs, 10 DIVUs).
+    assert mul == (19 * 4 + 1) / 20, f"MUL rate {mul}: expected 4 cycles each"
+    assert div == (9 * 34 + 1) / 10, f"DIVU rate {div}: expected 34 cycles each"
+
+
+@cocotb.test()
+@cocotb.parametrize(LAT)
+async def test_muldiv(dut, random_lat):
+    """M extension in the pipeline: forwarding, load-use, traps and flushes around M ops."""
+    h = await run_prog(dut, "muldiv", random_lat)
+    assert h.traps == 2, f"expected 2 traps, saw {h.traps}"
+
+
+@cocotb.test()
+@cocotb.parametrize(LAT)
+async def test_md_irq(dut, random_lat):
+    """Interrupts while a multiply or divide is in EX: abandoned, re-executed after MRET."""
+    h = await run_prog(dut, "md_irq", random_lat)
+    assert h.interrupts == 5, f"expected 5 interrupts, saw {h.interrupts}"
+
+
+@cocotb.test()
+@cocotb.parametrize(LAT, ("seed", [1, 2, 3]))
+async def test_md_irq_noise(dut, random_lat, seed):
+    """Random interrupt pulses over a divide/multiply loop."""
+    h = await run_prog(dut, "md_noise", random_lat, irq_noise=True, seed=seed)
+    # Interrupted instruction = the one the previous record would have run next.
+    on_md = 0
+    for i, (_, r) in enumerate(h.retired):
+        if r["intr"] and i and not h.retired[i - 1][1]["trap"]:
+            w = h.mem.read_word(h.retired[i - 1][1]["pc_wdata"])
+            on_md += (w & 0x7F) == 0x33 and (w >> 25) == 1
+    dut._log.info("seed %d: %d interrupts, %d of them on an M instruction",
+                  seed, h.interrupts, on_md)
+    assert h.interrupts > 10, f"only {h.interrupts} interrupts were taken"
+    assert on_md >= 5, f"only {on_md} interrupts landed on an M instruction"
 
 
 @cocotb.test()

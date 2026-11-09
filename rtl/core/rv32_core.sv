@@ -1,5 +1,5 @@
-// rv32_core: 5-stage in-order RV32I + Zicsr, machine mode only.
-// IF (rv32_fetch) | ID decode + regfile | EX ALU, branches, CSRs |
+// rv32_core: 5-stage in-order RV32IM + Zicsr, machine mode only.
+// IF (rv32_fetch) | ID decode + regfile | EX ALU, branches, CSRs, M unit |
 // MEM issues the data request | WB takes the response and writes rd.
 // Traps commit when the faulting instruction moves MEM -> WB; interrupts
 // are attached to the instruction leaving EX, which then does nothing else.
@@ -44,6 +44,10 @@ module rv32_core #(
     output logic [ 3:0] rvfi_mem_wmask,
     output logic [31:0] rvfi_mem_rdata,
     output logic [31:0] rvfi_mem_wdata
+`ifdef FORMAL
+    ,
+    output logic        f_md_busy  // formal harness only: M unit has an operation in flight
+`endif
 );
 
   // ---------------------------------------------------------------- control
@@ -67,7 +71,7 @@ module rv32_core #(
   // ---------------------------------------------------------------- ID
   logic [4:0] d_rs1, d_rs2, d_rd;
   logic d_rd_we, d_a_pc, d_a_zero, d_b_imm, d_is_branch, d_is_jal, d_is_jalr;
-  logic d_is_load, d_is_store, d_is_csr, d_is_mret, d_illegal, d_is_ecall, d_is_ebreak;
+  logic d_is_load, d_is_store, d_is_csr, d_is_mret, d_is_md, d_illegal, d_is_ecall, d_is_ebreak;
   logic [31:0] d_imm, rf_rdata1, rf_rdata2;
   logic [3:0] d_alu_op;
 
@@ -77,7 +81,7 @@ module rv32_core #(
       .alu_op(d_alu_op), .a_pc(d_a_pc), .a_zero(d_a_zero), .b_imm(d_b_imm),
       .is_branch(d_is_branch), .is_jal(d_is_jal), .is_jalr(d_is_jalr),
       .is_load(d_is_load), .is_store(d_is_store), .is_csr(d_is_csr),
-      .is_mret(d_is_mret), .illegal(d_illegal), .is_ecall(d_is_ecall),
+      .is_mret(d_is_mret), .is_md(d_is_md), .illegal(d_illegal), .is_ecall(d_is_ecall),
       .is_ebreak(d_is_ebreak)
   );
 
@@ -100,7 +104,7 @@ module rv32_core #(
   // ---------------------------------------------------------------- ID/EX
   logic        ex_valid, ex_rd_we, ex_a_pc, ex_a_zero, ex_b_imm, ex_is_branch;
   logic        ex_is_jal, ex_is_jalr, ex_is_load, ex_is_store, ex_is_csr, ex_is_mret;
-  logic        ex_exc_in;
+  logic        ex_is_md, ex_exc_in;
   logic [ 3:0] ex_cause_in, ex_alu_op;
   logic [ 4:0] ex_rs1, ex_rs2, ex_rd;
   logic [31:0] ex_pc, ex_insn, ex_imm, ex_rs1_val, ex_rs2_val;
@@ -139,19 +143,25 @@ module rv32_core #(
 
   // Forwarding selects registered (timing); they track the ID/EX, EX/MEM and
   // MEM/WB updates below exactly, so they equal the direct compare. fwd_* drive
-  // operand bits [15:0], the kept copies fwd_*_hi bits [31:16] (fanout).
-  (* keep *) logic [1:0] fwd_a_hi, fwd_b_hi;
+  // operand bits [15:0], the kept copies fwd_*_hi bits [31:16] (fanout), and
+  // the inverted copies fwd_*_mdn the M unit's own operand muxes, so it adds no
+  // load on fwd_rs1/2 (inverted so yosys does not merge them with fwd_*).
+  (* keep *) logic [1:0] fwd_a_hi, fwd_b_hi, fwd_a_mdn, fwd_b_mdn;
   always_ff @(posedge clk) begin
     if (rst) begin
       fwd_a    <= 2'd0;
       fwd_b    <= 2'd0;
       fwd_a_hi <= 2'd0;
       fwd_b_hi <= 2'd0;
+      fwd_a_mdn <= 2'b11;
+      fwd_b_mdn <= 2'b11;
     end else begin
       fwd_a    <= fwd_a_nxt;
       fwd_b    <= fwd_b_nxt;
       fwd_a_hi <= fwd_a_nxt;
       fwd_b_hi <= fwd_b_nxt;
+      fwd_a_mdn <= ~fwd_a_nxt;
+      fwd_b_mdn <= ~fwd_b_nxt;
     end
   end
 
@@ -165,7 +175,8 @@ module rv32_core #(
     if (ex_rs2 != 5'd0 && mem_valid && mem_rd == ex_rs2) fwd_b_ref = 2'd1;
     else if (ex_rs2 != 5'd0 && wb_valid && wb_rd == ex_rs2) fwd_b_ref = 2'd2;
     if (!rst) assert (fwd_a == fwd_a_ref && fwd_b == fwd_b_ref &&
-                      fwd_a_hi == fwd_a_ref && fwd_b_hi == fwd_b_ref);
+                      fwd_a_hi == fwd_a_ref && fwd_b_hi == fwd_b_ref &&
+                      ~fwd_a_mdn == fwd_a_ref && ~fwd_b_mdn == fwd_b_ref);
   end
 `endif
 
@@ -178,7 +189,11 @@ module rv32_core #(
   assign mem_stall = wb_stall || (mem_bus && !d_gnt);
   // CSR accesses wait for older instructions to retire so counters read exact.
   assign csr_drain = ex_valid && ex_is_csr && (mem_valid || wb_valid);
-  assign ex_stall  = mem_stall || csr_drain;
+  // An M op holds EX until its result is ready; a pending interrupt lets it go at
+  // once (it then carries the interrupt and is abandoned).
+  logic md_wait, md_done, md_busy, irq_pending;
+  assign md_wait   = ex_valid && ex_is_md && !md_done && !irq_pending;
+  assign ex_stall  = mem_stall || csr_drain || md_wait;
   assign id_stall  = ex_stall || load_use;
 
   assign mem_go      = mem_valid && !mem_stall;
@@ -193,7 +208,6 @@ module rv32_core #(
   logic        csr_illegal, csr_wr_intent, ex_exc, ex_do;
   logic [31:0] csr_rdata, csr_wsrc, mtvec, mepc, irq_cause, ex_tval;
   logic [ 3:0] ex_cause;
-  logic        irq_pending;
   logic [ 2:0] ex_funct3;
 
   assign ex_funct3 = ex_insn[14:12];
@@ -301,6 +315,37 @@ module rv32_core #(
       .irq_pending, .irq_cause
   );
 
+  // M unit: operands are valid once MEM is not stalled (a load result in WB has
+  // arrived), the same condition under which EX could advance.
+  logic [31:0] md_result, md_a, md_b;
+  always_comb begin
+    unique case (~fwd_a_mdn)
+      2'd1:    md_a = mem_result;
+      2'd2:    md_a = wb_value;
+      default: md_a = ex_rs1_val;
+    endcase
+    unique case (~fwd_b_mdn)
+      2'd1:    md_b = mem_result;
+      2'd2:    md_b = wb_value;
+      default: md_b = ex_rs2_val;
+    endcase
+  end
+  rv32_muldiv u_md (
+      .clk, .rst,
+      .start(ex_valid && ex_is_md && !md_busy && !mem_stall && !trap_commit),
+      .clear(ex_go || trap_commit),
+      .op(ex_funct3), .a(md_a), .b(md_b),
+      .busy(md_busy), .done(md_done), .result(md_result)
+  );
+
+`ifdef FORMAL
+  assign f_md_busy = md_busy;
+  always_comb begin
+    if (!rst && md_busy) assert (ex_valid && ex_is_md);
+    if (!rst) cover (md_busy && !md_done && irq_take);  // an interrupt cuts an M op short
+  end
+`endif
+
   // Store lane placement and byte-lane mask of the access (size from funct3).
   logic [3:0] size_mask, lane_mask;
   logic [31:0] st_data, lane_bits;
@@ -335,6 +380,7 @@ module rv32_core #(
       ex_is_store  <= 1'b0;
       ex_is_csr    <= 1'b0;
       ex_is_mret   <= 1'b0;
+      ex_is_md     <= 1'b0;
       ex_exc_in    <= 1'b0;
       ex_cause_in  <= 4'd0;
     end else if (trap_commit) begin
@@ -361,6 +407,7 @@ module rv32_core #(
       ex_is_store  <= d_is_store;
       ex_is_csr    <= d_is_csr;
       ex_is_mret   <= d_is_mret;
+      ex_is_md     <= d_is_md;
       ex_exc_in    <= id_exc;
       ex_cause_in  <= id_cause;
     end else begin
@@ -415,7 +462,8 @@ module rv32_core #(
                         (ex_insn[31:20] == 12'hB02 || ex_insn[31:20] == 12'hB82);
       mem_pc         <= ex_pc;
       mem_insn       <= ex_insn;
-      mem_result     <= ex_is_csr ? csr_rdata : (ex_is_jal || ex_is_jalr) ? pc_plus4 : alu_y;
+      mem_result     <= ex_is_csr ? csr_rdata : (ex_is_jal || ex_is_jalr) ? pc_plus4 :
+                        ex_is_md ? md_result : alu_y;
       mem_addr       <= alu_y;
       mem_wdata      <= st_data;
       mem_be         <= lane_mask;
