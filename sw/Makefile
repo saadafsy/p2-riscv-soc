@@ -74,5 +74,27 @@ endif
 .PHONY: FORCE
 FORCE:
 
+# CoreMark (third_party/coremark + coremark/core_portme.*), kept out of build/sw so
+# the default lockstep regression does not run it:
+#   make -C sw coremark [CM_ITER=2] [MARCH=rv32i_zicsr]
+#   -> build/coremark/<MARCH>_it<CM_ITER>/coremark.{elf,bin,hex,dis}
+CM_DIR   = $(ROOT)/third_party/coremark
+CM_ITER ?= 2
+CM_OUT   = $(ROOT)/build/coremark/$(MARCH)_it$(CM_ITER)
+CM_SRC   = $(addprefix $(CM_DIR)/,core_list_join.c core_main.c core_matrix.c core_state.c \
+             core_util.c) $(SW)/coremark/core_portme.c
+CM_OPT   = -O2
+CM_FLAGS = $(ARCH) $(CM_OPT) -ffreestanding -nostdlib -I$(SW)/coremark -I$(CM_DIR) -I$(COMMON) \
+           -DITERATIONS=$(CM_ITER) -DFLAGS_STR='"$(CM_OPT) -march=$(MARCH)"'
+
+.PHONY: coremark
+coremark: $(CM_OUT)/coremark.elf
+$(CM_OUT)/coremark.elf: $(CM_SRC) $(SW)/coremark/core_portme.h $(COMMON_SRC) $(COMMON_HDR) \
+                        $(COMMON)/link.ld
+	@mkdir -p $(dir $@)
+	$(CC) $(CM_FLAGS) $(LDFLAGS) -o $@ $(COMMON)/crt0.S $(COMMON)/rt.S $(COMMON)/printf.c \
+	  $(COMMON)/uart.c $(CM_SRC)
+	$(PRODUCTS)
+
 clean:
 	rm -rf $(BUILD)
