@@ -82,6 +82,7 @@ Tools:
 - for `pd/` and `dft/`, Docker with the `openroad/orfs` and
   `ghcr.io/aucohl/fault` images;
 - for `formal/riscv-formal/`, a clone of YosysHQ/riscv-formal.
+- for the accelerator tests, [p1-attention](https://github.com/saadafsy/p1-attention) cloned next to this repo (or `P1_ROOT=<path>`).
 
 ```
 make sw       # build ISA tests and C programs, run each on the ISS

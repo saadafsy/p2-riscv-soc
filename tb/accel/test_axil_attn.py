@@ -12,7 +12,7 @@ import cocotb
 from cocotb.clock import Clock
 from cocotb.triggers import FallingEdge, RisingEdge, Timer
 
-P1 = pathlib.Path(os.environ.get("P1_ROOT", "/home/saad/p1-attention"))
+P1 = pathlib.Path(os.environ.get("P1_ROOT", pathlib.Path(__file__).resolve().parents[3] / "p1-attention"))
 sys.path.insert(0, str(P1 / "model"))
 import attn  # noqa: E402
 

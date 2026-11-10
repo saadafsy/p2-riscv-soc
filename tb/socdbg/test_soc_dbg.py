@@ -31,7 +31,7 @@ sys.path.insert(0, str(ROOT / "tb/debug"))
 from jtag_drv import IDCODE, IR_DBG, IR_IDCODE, ST_OK, Jtag  # noqa: E402
 from test_soc import check_lockstep, read_hex, reset_soc  # noqa: E402
 
-P1 = pathlib.Path(os.environ.get("P1_ROOT", "/home/saad/p1-attention"))
+P1 = pathlib.Path(os.environ.get("P1_ROOT", ROOT.parent / "p1-attention"))
 ACCEL_PERIOD_PS = int(os.environ.get("ACCEL_PERIOD_PS", "13698"))
 TCK_PS = 37000  # unrelated to the 10 ns system clock
 SW = ROOT / "build/sw"

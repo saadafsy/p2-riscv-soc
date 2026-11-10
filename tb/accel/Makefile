@@ -9,7 +9,7 @@
 SIM ?= verilator
 TOPLEVEL_LANG ?= verilog
 ROOT := $(abspath ../..)
-P1_ROOT ?= /home/saad/p1-attention
+P1_ROOT ?= $(abspath $(ROOT)/../p1-attention)
 P1_COMMIT := 86d497c56a39a8364c21f87758da95bae349f767
 
 VERILOG_SOURCES = $(ROOT)/rtl/periph/sync2ff.sv $(ROOT)/rtl/accel/async_fifo.sv \

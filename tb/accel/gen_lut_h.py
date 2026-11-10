@@ -7,7 +7,7 @@ import sys
 
 HERE = pathlib.Path(__file__).resolve().parent
 P2 = HERE.parents[1]
-DEFAULT_P1 = pathlib.Path("/home/saad/p1-attention")
+DEFAULT_P1 = P2.parent / "p1-attention"
 DEFAULT_OUT = P2 / "sw/common/accel_exp_lut.h"
 
 

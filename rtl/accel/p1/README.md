@@ -1,7 +1,7 @@
 # rtl/accel/p1: attention engine from p1-attention (copied, not edited)
 
 Source: p1-attention commit `86d497c56a39a8364c21f87758da95bae349f767`
-(`git -C /home/saad/p1-attention rev-parse HEAD`, 2026-11-08), files from
+(`git -C ../p1-attention rev-parse HEAD`, 2026-11-08), files from
 its `rtl/` directory, byte-identical:
 
 | File | sha256 |
