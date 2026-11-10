@@ -213,14 +213,16 @@ it goes to the external SMT solver (z3) that Verilator calls for
   `Assertion failed in <path>` and calls `$stop`. Any UVM error turns into
   `$fatal` in tb_top's `final` block, so a run exits nonzero.
 
-## Observation about the RTL (not a mismatch)
+## Bug found by the random runs (fixed)
 
-`uart_apb` ends a bit period on `tx_cnt == div_eff - 1`. If DIVISOR is
-lowered below the running `tx_cnt` mid-character, the counter has to wrap
-through 65536 before the bit ends, so TX stalls for up to about 65k
-cycles. The model mirrors this, so it is not flagged. Early random runs
-showed it: only 17 bytes went out and 84 were dropped. The random
-DIVISOR writes are now held at 3 (95%) so that TX keeps draining.
+`uart_apb` used to end a bit period on `tx_cnt == div_eff - 1`. If DIVISOR
+was lowered below the running `tx_cnt` mid-character, the counter had to
+wrap through 65536 before the bit ended, so TX stalled for up to about 65k
+cycles. The model mirrored this, so the scoreboard did not flag it; the run
+statistics did: early random runs sent only 17 bytes and dropped 84. The
+bit timer now ends on `tx_cnt >= div_eff - 1`, so a lowered divisor ends
+the bit at once (commit edb90c2, `rtl/periph/uart_apb.sv`). The random
+DIVISOR writes are still mostly held at 3 so TX keeps draining.
 
 ## Not covered here
 
