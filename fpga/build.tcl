@@ -41,5 +41,6 @@ report_timing_summary -file $out/timing.rpt
 set wns [get_property SLACK [get_timing_paths -max_paths 1 -nworst 1 -setup]]
 puts "setup WNS: $wns ns"
 if {$wns < 0} { puts "ERROR: timing not met"; exit 1 }
+write_checkpoint -force $out/routed.dcp
 write_bitstream -force $out/basys3_top.bit
 exit 0

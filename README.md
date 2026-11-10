@@ -44,6 +44,8 @@ under `build/` (gitignored), and each doc says how to rerun.
 | Speedup | Same attention problem, same data, outputs identical: 21.8x faster than hand-optimized C on the core at N = 64 (71,215 vs 1,549,997 CPU cycles), 10.4x at N = 16. Wall time in CPU cycles (mcycle), SoC simulation with the core at 100 MHz and the accelerator at 73 MHz. The compute itself is 9,083 cycles (about 170x); 87% of the accelerator time is moving Q/K/V in and results out over AXI4-Lite one word at a time (`make speedup`). |
 | Debug and test | JTAG TAP (IEEE 1149.1) with an OBI master behind a round-robin arbiter; core hold for program loading; March C- BIST of the 64 KB RAM |
 
+![accelerator vs software cycle counts](docs/img/speedup.png)
+
 ### Verification
 
 | Method | What it covers |
@@ -67,6 +69,10 @@ under `build/` (gitignored), and each doc says how to rerun.
 | Performance model | C++ model, calibrated on directed tests. It predicts held-out programs and CoreMark within 0.6% of RTL cycles at about 70 M instructions/s (docs/perf_model.md). |
 | Artix-7, Basys 3 (Vivado 2026.1) | Full SoC with the accelerator (`ACCEL=1`) fits the XC7A35T and meets timing: SoC clock 62.5 MHz with +1.11 ns (about 67 MHz), accelerator clock 50 MHz with +3.73 ns, JTAG met, hold met; 0 DRC, bitstream written. 14.5k LUTs (70%), 8.8k FFs, 56 of 90 DSP48, 21 BRAM tiles (evidence/vivado_basys3_accel/). |
 | Artix-7 (openXC7: yosys + nextpnr) | Same SoC routes at 65.3 MHz SoC / 72.9 MHz accelerator with 15.3k LUTs and 72 DSP48 (the 16 MAC multipliers mapped to LUTs so the route converges). Without the accelerator: 5.1k LUTs, 65.5 MHz. |
+
+<p align="center"><img src="docs/img/fpga_floorplan_basys3.png" width="640" alt="Vivado placement on the XC7A35T coloured by block"></p>
+
+<sub>Vivado placement of the full SoC on the Basys 3's XC7A35T: logic slices, DSPs (diamonds) and block RAMs coloured by the block that uses them (`scripts/fpga_floorplan.tcl`, `scripts/fpga_floorplan.py`).</sub>
 
 Not done: running on the board. The Vivado bitstream is built (`ACCEL=1
 vivado -mode batch -source fpga/build.tcl -tclargs build/sw/board/board.hex`). The board firmware (`make board`) is checked in simulation by decoding
@@ -94,6 +100,7 @@ make rand N=100
 make socdbg   # JTAG / core hold / BIST / clock gate: lint, latch check, formal, SoC tests
 make board    # Basys 3 firmware: accelerator results decoded off the UART pin in simulation
 make speedup  # accelerator vs software cycle counts on the SoC (mcycle)
+python3 scripts/speedup_plot.py [log]  # the speedup chart in docs/img
 make -C sw coremark            # then see docs/coremark.md
 make perf                      # C++ model, refit and compare against the RTL
 make dft                       # scan chain + ATPG for the peripherals and the core
