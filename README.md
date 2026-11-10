@@ -65,10 +65,11 @@ under `build/` (gitignored), and each doc says how to rerun.
 | sky130 place and route (core) | OpenROAD RTL-to-GDS at 10 ns: 119.8 MHz signoff, 25.7k cells, 0.43 mm^2 die, 22.5 mW; 0 DRC, antenna or slew/cap violations (pd/README.md) |
 | DFT | Scan chain plus SAT-based stuck-at ATPG on the core, 98.4% of 117,684 collapsed faults with 3,881 patterns; peripherals 93.6 to 99.3%; chains verified in simulation (dft/README.md) |
 | Performance model | C++ model, calibrated on directed tests. It predicts held-out programs and CoreMark within 0.6% of RTL cycles at about 70 M instructions/s (docs/perf_model.md). |
-| Artix-7, Basys 3 (openXC7: yosys + nextpnr) | Full SoC with the accelerator (`ACCEL=1`) routes and meets timing: SoC clock 65.3 MHz post-route against 62.5 MHz, accelerator 72.9 MHz against 50 MHz, JTAG 189 MHz against 12 MHz. Uses 15.3k LUTs (74% of the XC7A35T), 8.7k FFs, 72 of 90 DSP48 (the 16 MAC multipliers are mapped to LUTs; with all 88 in DSPs the route did not converge), 16 RAMB36 + 6 RAMB18. Without the accelerator: 5.1k LUTs, 65.5 MHz. Bitstreams written. nextpnr places on the XC7A50T die that the 35T shares, so whether the bitstream stays inside the 35T's usable area is checked only by a Vivado build (`ACCEL=1 vivado -mode batch -source fpga/build.tcl`, not yet run). |
+| Artix-7, Basys 3 (Vivado 2026.1) | Full SoC with the accelerator (`ACCEL=1`) fits the XC7A35T and meets timing: SoC clock 62.5 MHz with +1.11 ns (about 67 MHz), accelerator clock 50 MHz with +3.73 ns, JTAG met, hold met; 0 DRC, bitstream written. 14.5k LUTs (70%), 8.8k FFs, 56 of 90 DSP48, 21 BRAM tiles (evidence/vivado_basys3_accel/). |
+| Artix-7 (openXC7: yosys + nextpnr) | Same SoC routes at 65.3 MHz SoC / 72.9 MHz accelerator with 15.3k LUTs and 72 DSP48 (the 16 MAC multipliers mapped to LUTs so the route converges). Without the accelerator: 5.1k LUTs, 65.5 MHz. |
 
-Not done: running on the board. That needs Vivado, and `fpga/build.tcl` is
-ready. The board firmware (`make board`) is checked in simulation by decoding
+Not done: running on the board. The Vivado bitstream is built (`ACCEL=1
+vivado -mode batch -source fpga/build.tcl -tclargs build/sw/board/board.hex`). The board firmware (`make board`) is checked in simulation by decoding
 the UART pin: three accelerator runs with 0 mismatches, then PASS. The FPGA-only parts (BSCANE2 JTAG, BUFGCE clock gate) are linted and
 elaborated against the Xilinx cell library but not simulated. Nothing here
 is taped out.
