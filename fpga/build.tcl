@@ -19,7 +19,9 @@ foreach f [split [string trim [read [open $root/rtl/soc.f]]] "\n"] { lappend src
 lappend srcs $root/fpga/basys3_top.sv
 # FPGA_XC7 selects BSCANE2 (bscan_jtag_xilinx) and BUFGCE (clk_gate). Not
 # XILINX_FPGA: p1's RTL uses that for an XPM ROM that P2 does not include.
-read_verilog -sv -define FPGA_XC7 $srcs
+read_verilog -sv $srcs
+# Vivado 2026.1 accepts -define on read_verilog only in compile-unit mode
+set_property verilog_define {FPGA_XC7} [current_fileset]
 set_property include_dirs [list $root/rtl/accel/p1] [current_fileset]
 read_xdc $root/fpga/basys3.xdc
 # ACCEL=1 in the environment builds the full SoC with the attention accelerator
