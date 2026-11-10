@@ -32,7 +32,7 @@ EXTRA_clkgate_test = $(COMMON)/accel.c
 ISA_PROGS = $(basename $(notdir $(wildcard $(SW)/isa/*.S)))
 C_PROGS   = $(basename $(notdir $(wildcard $(SW)/c/*.c)))
 
-.PHONY: all isa c asm board clean $(ISA_PROGS) $(C_PROGS)
+.PHONY: all isa c asm board speedup clean $(ISA_PROGS) $(C_PROGS)
 all: isa c
 isa: $(ISA_PROGS)
 c: $(C_PROGS)
@@ -74,6 +74,13 @@ $(BUILD)/$(NAME)/$(NAME).elf: $(ASM_SRC) $(COMMON)/link.ld FORCE
 	$(PRODUCTS)
 endif
 .PHONY: FORCE
+
+# Accelerator vs software cycle counts (attn_test.c built with -DSPEEDUP).
+speedup: $(BUILD)/speedup/speedup.elf
+$(BUILD)/speedup/speedup.elf: $(SW)/c/attn_test.c $(COMMON_SRC) $(COMMON)/accel.c $(COMMON_HDR) $(COMMON)/link.ld
+	@mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -DSPEEDUP $(LDFLAGS) -o $@ $(COMMON_SRC) $(COMMON)/accel.c $<
+	$(PRODUCTS)
 
 # Board firmware for fpga/build.tcl: attn_test with its results on the UART
 # (the simulation build prints only to SIMCTRL). -> build/sw/board/board.hex

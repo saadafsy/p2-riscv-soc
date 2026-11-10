@@ -64,3 +64,8 @@ clean:
 board:
 	$(MAKE) -C sw board
 	$(MAKE) -C tb/soc COCOTB_TEST_MODULES=test_board_uart COCOTB_RESULTS_FILE=results_board_uart.xml
+
+# Accelerator vs software on the same problem, cycle counts from mcycle (attn_test.c -DSPEEDUP)
+speedup:
+	$(MAKE) -C sw speedup
+	$(MAKE) -C tb/soc PROGS=speedup MAX_CYCLES=20000000 COCOTB_RESULTS_FILE=results_speedup.xml

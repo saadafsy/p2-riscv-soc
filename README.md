@@ -41,6 +41,7 @@ under `build/` (gitignored), and each doc says how to rerun.
 | Pipeline | CPI 1.00 straight-line, 1.13 on the CRC-32 + matrix benchmark; load-use 1 stall, taken branch 2 |
 | CoreMark | 2.267 CoreMark/MHz with M, 0.962 without. RTL simulation, 2 iterations; not an official score (docs/coremark.md). |
 | Accelerator | p1's attention engine behind AXI4-Lite and gray-pointer async FIFOs, with clock gating (docs/spec.md sections 12-13) |
+| Speedup | Same attention problem, same data, outputs identical: 21.8x faster than hand-optimized C on the core at N = 64 (71,215 vs 1,549,997 CPU cycles), 10.4x at N = 16. Wall time in CPU cycles (mcycle), SoC simulation with the core at 100 MHz and the accelerator at 73 MHz. The compute itself is 9,083 cycles (about 170x); 87% of the accelerator time is moving Q/K/V in and results out over AXI4-Lite one word at a time (`make speedup`). |
 | Debug and test | JTAG TAP (IEEE 1149.1) with an OBI master behind a round-robin arbiter; core hold for program loading; March C- BIST of the 64 KB RAM |
 
 ### Verification
@@ -90,6 +91,7 @@ make soc      # full SoC vs the ISS on every program
 make rand N=100
 make socdbg   # JTAG / core hold / BIST / clock gate: lint, latch check, formal, SoC tests
 make board    # Basys 3 firmware: accelerator results decoded off the UART pin in simulation
+make speedup  # accelerator vs software cycle counts on the SoC (mcycle)
 make -C sw coremark            # then see docs/coremark.md
 make perf                      # C++ model, refit and compare against the RTL
 make dft                       # scan chain + ATPG for the peripherals and the core

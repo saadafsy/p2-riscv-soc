@@ -247,7 +247,43 @@ static int run(int n, int use_irq) {
   return bad != 0 || cyc != exp;
 }
 
+#ifdef SPEEDUP
+// Wall time in CPU clock cycles (mcycle) for the same attention problem:
+// accelerator end to end (load Q/K/V, compute, read out) versus the software
+// reference above on the RV32IM core. Runs are not overlapped here.
+static int speedup(int n) {
+  for (int i = 0; i < n * D; i++) {
+    q_m[i] = rnd8();
+    k_m[i] = rnd8();
+    v_m[i] = rnd8();
+  }
+  uint32_t t0 = csr_read(mcycle);
+  accel_load(ACCEL_SEL_Q, q_m, n);
+  accel_load(ACCEL_SEL_K, k_m, n);
+  accel_load(ACCEL_SEL_V, v_m, n);
+  uint32_t t1 = csr_read(mcycle);
+  accel_start(n, 0);
+  accel_wait();
+  uint32_t t2 = csr_read(mcycle);
+  accel_read(out_hw, n);
+  uint32_t t3 = csr_read(mcycle);
+  attn_ref(n);
+  uint32_t t4 = csr_read(mcycle);
+  int bad = 0;
+  for (int i = 0; i < n * D; i++) bad += out_hw[i] != out_ref[i];
+  uint32_t hw = t3 - t0, sw = t4 - t3;
+  printf("speedup: N=%d load %u + compute %u + read %u = %u cycles accel, %u cycles software, x%u.%02u, %d mismatches\n",
+         n, t1 - t0, t2 - t1, t3 - t2, hw, sw, sw / hw, (sw % hw) * 100 / hw, bad);
+  return bad;
+}
+#endif
+
 int main(void) {
+#ifdef SPEEDUP
+  printf_putchar = putchar_sim;
+  if (!accel_present()) return 1;
+  return speedup(16) + speedup(64);
+#endif
 #ifdef BOARD
   printf_putchar = putchar_uart;  // board build: results on the USB-UART
 #else
